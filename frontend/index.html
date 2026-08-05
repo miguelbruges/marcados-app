@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MARCADOS</title>
+<meta name="theme-color" content="#1b4332">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <span class="brand">MARCADOS</span>
+  <button id="btn-salir" class="link-btn" hidden>Salir</button>
+</header>
+
+<main id="app" class="app"></main>
+
+<nav id="tabbar" class="tabbar" hidden>
+  <a href="#/panel" data-tab="panel">Panel</a>
+  <a href="#/asistencia" data-tab="asistencia">Asistencia</a>
+  <a href="#/personas/nueva" data-tab="nueva">Agregar joven</a>
+</nav>
+
+<script src="js/api.js"></script>
+<script src="js/matching-ui.js"></script>
+<script src="js/router.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

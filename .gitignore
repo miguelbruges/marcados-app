@@ -1,0 +1,39 @@
+# --- Datos personales: NUNCA al repo ---
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+!frontend/**/*.csv
+*.db
+*.sqlite
+*.sqlite3
+/backend/data/
+/data/
+
+# --- Credenciales ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- Node (por si el frontend crece con tooling) ---
+node_modules/
+
+# --- SO / editores ---
+.DS_Store
+.vscode/
+.idea/
