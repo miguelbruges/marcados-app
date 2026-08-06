@@ -31,7 +31,10 @@ const Api = (() => {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (resp.status === 401) {
+    if (resp.status === 401 && auth) {
+      // Solo tratamos el 401 como "sesión vencida" en pedidos autenticados.
+      // En el login mismo (auth: false) un 401 es "credenciales incorrectas"
+      // y tiene que mostrarse tal cual, no como sesión expirada.
       clearSession();
       location.hash = "#/login";
       throw new Error("Sesión expirada");
@@ -39,7 +42,8 @@ const Api = (() => {
 
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
-      throw new Error(data.detail ? JSON.stringify(data.detail) : `Error ${resp.status}`);
+      const detalle = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+      throw new Error(detalle || `Error ${resp.status}`);
     }
 
     if (resp.status === 204) return null;

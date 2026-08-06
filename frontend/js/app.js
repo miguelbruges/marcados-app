@@ -45,7 +45,8 @@ Router.on("/login", () => {
       Api.setSession(access_token, rol, nombre);
       Router.navegar("/panel");
     } catch (e2) {
-      errorBox.textContent = "Email o contraseña incorrectos.";
+      console.error("Error de login:", e2);
+      errorBox.textContent = e2.message || "No se pudo iniciar sesión.";
     }
   });
 });
