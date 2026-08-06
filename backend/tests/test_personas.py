@@ -30,3 +30,55 @@ def test_buscar_coincidencias_endpoint(client, auth_headers):
 def test_obtener_persona_inexistente_da_404(client, auth_headers):
     resp = client.get("/personas/9999", headers=auth_headers)
     assert resp.status_code == 404
+
+
+def test_crear_persona_asigna_fecha_ingreso_automatica_si_no_se_manda(client, auth_headers):
+    from datetime import date
+
+    resp = client.post("/personas", json={"nombres": "Sofia", "apellidos": "Hernandez"}, headers=auth_headers)
+    assert resp.status_code == 201
+    assert resp.json()["fecha_ingreso"] == date.today().isoformat()
+
+
+def test_crear_persona_respeta_fecha_ingreso_explicita(client, auth_headers):
+    resp = client.post(
+        "/personas",
+        json={"nombres": "Sofia", "apellidos": "Hernandez", "fecha_ingreso": "2020-01-15"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["fecha_ingreso"] == "2020-01-15"
+
+
+def test_marcar_nuevo_servidor_usa_hoy_por_defecto(client, auth_headers):
+    from datetime import date
+
+    persona = client.post(
+        "/personas", json={"nombres": "Sofia", "apellidos": "Hernandez"}, headers=auth_headers
+    ).json()
+    assert persona["servidor"] is False
+
+    resp = client.post(f"/personas/{persona['id']}/marcar-servidor", json={}, headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["servidor"] is True
+    assert body["fecha_inicio_servicio"] == date.today().isoformat()
+
+
+def test_marcar_nuevo_servidor_con_fecha_explicita_de_la_reunion_staff(client, auth_headers):
+    persona = client.post(
+        "/personas", json={"nombres": "Camila", "apellidos": "Rodriguez"}, headers=auth_headers
+    ).json()
+
+    resp = client.post(
+        f"/personas/{persona['id']}/marcar-servidor",
+        json={"fecha_inicio_servicio": "2026-06-01"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["fecha_inicio_servicio"] == "2026-06-01"
+
+
+def test_marcar_nuevo_servidor_persona_inexistente_da_404(client, auth_headers):
+    resp = client.post("/personas/9999/marcar-servidor", json={}, headers=auth_headers)
+    assert resp.status_code == 404

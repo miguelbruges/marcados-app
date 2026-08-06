@@ -58,6 +58,10 @@ class PersonaOut(PersonaBase):
     semaforo_espiritual: str | None = None
 
 
+class MarcarServidorRequest(BaseModel):
+    fecha_inicio_servicio: date | None = None  # si no se manda, el backend usa hoy
+
+
 class PersonaResumen(BaseModel):
     id: int
     id_unico: str

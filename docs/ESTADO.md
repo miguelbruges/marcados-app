@@ -32,6 +32,14 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
       selección manual por radio buttons. 31 tests backend, todos pasando.
       Probado end-to-end en navegador con viewport móvil: el caso Anthony
       (ambiguo) quedó correctamente en pendientes sin auto-guardarse.
+- [x] **Fecha de ingreso automática.** `POST /personas` fija `fecha_ingreso`
+      a hoy si no se manda explícita — nadie tiene que acordarse de
+      escribirla al dar de alta un joven nuevo.
+- [x] **Nuevo servidor (reunión STAFF).** `POST /personas/{id}/marcar-servidor`
+      marca `servidor=true` y fija `fecha_inicio_servicio` (hoy por defecto,
+      o la fecha de la reunión si se manda). Página frontend con el mismo
+      buscador difuso que asistencia, enlazada desde "Jóvenes". 36 tests
+      backend pasando. Probado end-to-end en navegador.
 
 ## Pendiente — bloqueado por datos que no existen en este entorno
 

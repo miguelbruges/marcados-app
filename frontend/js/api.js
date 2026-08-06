@@ -59,6 +59,8 @@ const Api = (() => {
     personas: () => request("/personas"),
     crearPersona: (data) => request("/personas", { method: "POST", body: data }),
     buscarCoincidencias: (q) => request(`/personas/buscar/coincidencias?q=${encodeURIComponent(q)}`),
+    marcarServidor: (personaId, fecha_inicio_servicio) =>
+      request(`/personas/${personaId}/marcar-servidor`, { method: "POST", body: { fecha_inicio_servicio } }),
 
     crearOReusarEvento: (data) => request("/eventos", { method: "POST", body: data }),
     listarEventos: () => request("/eventos"),

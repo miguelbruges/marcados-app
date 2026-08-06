@@ -75,7 +75,11 @@ function stat(num, label) {
 // --- Ver jóvenes registrados ---
 Router.on("/personas", async () => {
   if (!requiereSesion()) return;
-  $app.innerHTML = `<h1>Jóvenes registrados</h1><div id="lista-personas" class="hint">Cargando...</div>`;
+  $app.innerHTML = `
+    <h1>Jóvenes registrados</h1>
+    <p><a href="#/servidores/nuevo">+ Marcar nuevo servidor (reunión STAFF)</a></p>
+    <div id="lista-personas" class="hint">Cargando...</div>
+  `;
   try {
     const personas = await Api.personas();
     const cont = document.getElementById("lista-personas");
@@ -88,7 +92,11 @@ Router.on("/personas", async () => {
         (p) => `
       <div class="card">
         <strong>${p.nombres} ${p.apellidos}</strong>
-        <div class="hint">${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}</div>
+        <div class="hint">
+          ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
+          ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
+        </div>
+        <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
       </div>
     `
       )
@@ -96,6 +104,40 @@ Router.on("/personas", async () => {
   } catch (e) {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }
+});
+
+// --- Marcar nuevo servidor (reunión STAFF) ---
+Router.on("/servidores/nuevo", () => {
+  if (!requiereSesion()) return;
+  $app.innerHTML = `
+    <h1>Nuevo servidor</h1>
+    <p class="hint">Para la reunión de servidores (STAFF): busca al joven y tócalo para marcarlo como servidor con esta fecha.</p>
+    <label>Fecha de integración</label>
+    <input type="date" id="serv-fecha" value="${new Date().toISOString().slice(0, 10)}">
+    <label>Buscar joven</label>
+    <div id="serv-buscador-slot"></div>
+    <h2>Marcados hoy en esta sesión</h2>
+    <ul class="lista-asistieron" id="serv-lista"><li class="hint">Nadie todavía.</li></ul>
+  `;
+
+  const buscador = crearBuscadorPersonas({
+    placeholder: "Nombre del joven...",
+    onSeleccionar: async (candidato) => {
+      const fecha = document.getElementById("serv-fecha").value;
+      try {
+        await Api.marcarServidor(candidato.persona_id, fecha);
+        const ul = document.getElementById("serv-lista");
+        const placeholder = ul.querySelector(".hint");
+        if (placeholder) placeholder.remove();
+        const li = document.createElement("li");
+        li.textContent = `✓ ${candidato.nombre_completo} — servidor desde ${fecha}`;
+        ul.prepend(li);
+      } catch (e) {
+        alert(`No se pudo marcar: ${e.message}`);
+      }
+    },
+  });
+  document.getElementById("serv-buscador-slot").appendChild(buscador);
 });
 
 // --- Registrar asistencia ---
@@ -333,7 +375,8 @@ Router.on("/personas/nueva", () => {
     try {
       const persona = await Api.crearPersona(data);
       document.getElementById("persona-ok").innerHTML =
-        `<div class="card">Guardado: <strong>${persona.nombres} ${persona.apellidos}</strong> (${persona.id_unico})</div>`;
+        `<div class="card">Guardado: <strong>${persona.nombres} ${persona.apellidos}</strong> (${persona.id_unico})<br>
+         <span class="hint">Fecha de ingreso registrada automáticamente: ${persona.fecha_ingreso}</span></div>`;
       form.reset();
     } catch (e2) {
       errorBox.textContent = `No se pudo guardar: ${e2.message}`;
