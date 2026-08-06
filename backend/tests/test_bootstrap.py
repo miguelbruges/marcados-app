@@ -31,7 +31,7 @@ def test_normaliza_el_email_a_minusculas(db_session, monkeypatch):
     assert db_session.query(Usuario).filter(Usuario.email == "admin@marcadosapp.dev").first() is not None
 
 
-def test_es_idempotente_no_duplica_ni_pisa_el_admin_existente(db_session, monkeypatch):
+def test_no_duplica_el_admin_al_correr_dos_veces(db_session, monkeypatch):
     monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "admin@marcadosapp.dev")
     monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "clave-inicial-segura")
 
@@ -39,3 +39,21 @@ def test_es_idempotente_no_duplica_ni_pisa_el_admin_existente(db_session, monkey
     bootstrap_admin(db_session)
 
     assert db_session.query(Usuario).filter(Usuario.email == "admin@marcadosapp.dev").count() == 1
+
+
+def test_sincroniza_la_contraseña_si_cambia_la_variable(db_session, monkeypatch):
+    """Si en un arranque anterior quedó una contraseña distinta (typo, intento
+    previo), cambiar la variable y reiniciar debe corregirla — no hay forma
+    de borrar el usuario a mano en producción."""
+    from app.security import verify_password
+
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "admin@marcadosapp.dev")
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "clave-vieja")
+    bootstrap_admin(db_session)
+
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "clave-nueva")
+    bootstrap_admin(db_session)
+
+    usuario = db_session.query(Usuario).filter(Usuario.email == "admin@marcadosapp.dev").first()
+    assert verify_password("clave-nueva", usuario.password_hash)
+    assert not verify_password("clave-vieja", usuario.password_hash)
