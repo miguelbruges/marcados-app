@@ -22,6 +22,15 @@ def test_crea_admin_cuando_estan_las_variables(db_session, monkeypatch):
     assert usuario.rol.value == "admin"
 
 
+def test_normaliza_el_email_a_minusculas(db_session, monkeypatch):
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "  Admin@MarcadosApp.DEV  ")
+    monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "clave-inicial-segura")
+
+    bootstrap_admin(db_session)
+
+    assert db_session.query(Usuario).filter(Usuario.email == "admin@marcadosapp.dev").first() is not None
+
+
 def test_es_idempotente_no_duplica_ni_pisa_el_admin_existente(db_session, monkeypatch):
     monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "admin@marcadosapp.dev")
     monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "clave-inicial-segura")

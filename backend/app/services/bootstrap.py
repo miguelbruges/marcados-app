@@ -20,6 +20,7 @@ def bootstrap_admin(db: Session) -> None:
     password = os.getenv("ADMIN_BOOTSTRAP_PASSWORD")
     if not email or not password:
         return
+    email = email.strip().lower()  # el login compara en minúsculas, ver auth.py
     if db.query(Usuario).filter(Usuario.email == email).first():
         return
     db.add(

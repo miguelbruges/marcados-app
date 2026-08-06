@@ -37,6 +37,26 @@ def test_login_password_invalida(client, db_session):
     assert resp.status_code == 401
 
 
+def test_login_ignora_mayusculas_y_espacios_en_el_email(client, db_session):
+    from app.models import RolUsuario, Usuario
+    from app.security import hash_password
+
+    db_session.add(
+        Usuario(
+            nombre="Admin",
+            email="admin@marcadosapp.dev",
+            password_hash=hash_password("clave-admin-123"),
+            rol=RolUsuario.ADMIN,
+        )
+    )
+    db_session.commit()
+
+    resp = client.post(
+        "/auth/login", json={"email": "  Admin@MarcadosApp.DEV  ", "password": "clave-admin-123"}
+    )
+    assert resp.status_code == 200
+
+
 def test_endpoint_protegido_sin_token_rechaza(client):
     resp = client.get("/personas")
     assert resp.status_code == 401

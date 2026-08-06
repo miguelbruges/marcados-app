@@ -12,7 +12,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.email == data.email).first()
+    # El email no debe ser sensible a mayúsculas/minúsculas para el login.
+    email = data.email.strip().lower()
+    usuario = db.query(Usuario).filter(Usuario.email == email).first()
     if not usuario or not usuario.activo or not verify_password(data.password, usuario.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email o contraseña incorrectos")
     token = create_access_token(subject=usuario.email, rol=usuario.rol.value)
