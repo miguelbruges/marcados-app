@@ -72,6 +72,32 @@ function stat(num, label) {
   return `<div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 }
 
+// --- Ver jóvenes registrados ---
+Router.on("/personas", async () => {
+  if (!requiereSesion()) return;
+  $app.innerHTML = `<h1>Jóvenes registrados</h1><div id="lista-personas" class="hint">Cargando...</div>`;
+  try {
+    const personas = await Api.personas();
+    const cont = document.getElementById("lista-personas");
+    if (!personas.length) {
+      cont.innerHTML = `<p class="hint">Todavía no hay jóvenes registrados.</p>`;
+      return;
+    }
+    cont.innerHTML = personas
+      .map(
+        (p) => `
+      <div class="card">
+        <strong>${p.nombres} ${p.apellidos}</strong>
+        <div class="hint">${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}</div>
+      </div>
+    `
+      )
+      .join("");
+  } catch (e) {
+    $app.innerHTML += `<div class="error">${e.message}</div>`;
+  }
+});
+
 // --- Registrar asistencia ---
 Router.on("/asistencia", async () => {
   if (!requiereSesion()) return;
@@ -152,6 +178,112 @@ async function iniciarRegistroAsistencia() {
   document.getElementById("buscador-slot").appendChild(buscador);
 
   await refrescarLista();
+}
+
+// --- Importar lista pegada (WhatsApp) ---
+Router.on("/asistencia/importar", () => {
+  if (!requiereSesion()) return;
+  $app.innerHTML = `
+    <h1>Importar lista de asistencia</h1>
+    <p class="hint">Pega el mensaje tal cual llega por WhatsApp. La primera línea con la palabra "asistencia" se ignora automáticamente.</p>
+    <label>Actividad</label>
+    <select id="imp-actividad">
+      <option value="1">Culto Juvenil</option>
+    </select>
+    <label>Fecha</label>
+    <input type="date" id="imp-fecha" value="${new Date().toISOString().slice(0, 10)}">
+    <label>Lista pegada</label>
+    <textarea id="imp-texto" rows="8" placeholder="asistencia culto juvenil 25/07/2026&#10;Sofia Hernandez&#10;Camila Rodriguez&#10;..."></textarea>
+    <button class="primary" id="imp-procesar">Procesar</button>
+    <div id="imp-resultado"></div>
+  `;
+  document.getElementById("imp-procesar").addEventListener("click", procesarListaImportada);
+});
+
+async function procesarListaImportada() {
+  const actividad_id = Number(document.getElementById("imp-actividad").value);
+  const fecha = document.getElementById("imp-fecha").value;
+  const texto = document.getElementById("imp-texto").value;
+  const resultado = document.getElementById("imp-resultado");
+  resultado.innerHTML = `<p class="hint">Procesando...</p>`;
+
+  let preview;
+  try {
+    preview = await Api.previewImportarLista({ actividad_id, fecha, texto });
+  } catch (e) {
+    resultado.innerHTML = `<div class="error">${e.message}</div>`;
+    return;
+  }
+
+  if (!preview.filas.length) {
+    resultado.innerHTML = `<p class="hint">No se reconoció ningún nombre en el texto pegado.</p>`;
+    return;
+  }
+
+  const encontradas = preview.filas.filter((f) => f.confianza === "ALTA" && f.candidatos.length);
+  const pendientes = preview.filas.filter((f) => !(f.confianza === "ALTA" && f.candidatos.length));
+
+  resultado.innerHTML = `
+    <h2>Coincidencias encontradas (${encontradas.length})</h2>
+    <div id="imp-encontradas"></div>
+    <h2>Pendientes por confirmar (${pendientes.length})</h2>
+    <div id="imp-pendientes"></div>
+    <button class="primary" id="imp-guardar">Guardar asistencia</button>
+    <div id="imp-guardar-resultado"></div>
+  `;
+
+  const $encontradas = document.getElementById("imp-encontradas");
+  const $pendientes = document.getElementById("imp-pendientes");
+
+  preview.filas.forEach((fila, idx) => {
+    const destino = encontradas.includes(fila) ? $encontradas : $pendientes;
+    destino.appendChild(renderFilaImportada(fila, idx));
+  });
+
+  document.getElementById("imp-guardar").addEventListener("click", async () => {
+    const seleccionados = new Set();
+    document.querySelectorAll('#imp-resultado input[type=radio]:checked').forEach((input) => {
+      if (input.value) seleccionados.add(Number(input.value));
+    });
+    const $out = document.getElementById("imp-guardar-resultado");
+    if (!seleccionados.size) {
+      $out.innerHTML = `<p class="hint">No hay nadie seleccionado para guardar.</p>`;
+      return;
+    }
+    try {
+      const r = await Api.confirmarImportarLista({
+        evento_id: preview.evento.id,
+        persona_ids: [...seleccionados],
+      });
+      $out.innerHTML = `<div class="card">Guardados: ${r.guardados} · Ya estaban registrados: ${r.ya_registrados}</div>`;
+    } catch (e) {
+      $out.innerHTML = `<div class="error">${e.message}</div>`;
+    }
+  });
+}
+
+function renderFilaImportada(fila, idx) {
+  const div = document.createElement("div");
+  div.className = "card";
+  const opciones = fila.candidatos
+    .map(
+      (c, i) => `
+    <label class="hint" style="display:block;font-weight:normal;">
+      <input type="radio" name="fila-${idx}" value="${c.persona_id}" ${fila.confianza === "ALTA" && i === 0 ? "checked" : ""}>
+      ${c.nombre_completo} (${Math.round(c.score)}%)
+    </label>
+  `
+    )
+    .join("");
+  div.innerHTML = `
+    <div><strong>"${fila.texto_original}"</strong> <span class="badge ${fila.confianza}">${fila.confianza}</span></div>
+    ${opciones || `<p class="hint">Sin coincidencias — puede ser un joven nuevo.</p>`}
+    <label class="hint" style="display:block;font-weight:normal;">
+      <input type="radio" name="fila-${idx}" value="" ${!(fila.confianza === "ALTA" && fila.candidatos.length) ? "checked" : ""}>
+      Ignorar esta línea
+    </label>
+  `;
+  return div;
 }
 
 // --- Agregar joven ---

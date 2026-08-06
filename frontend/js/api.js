@@ -65,5 +65,8 @@ const Api = (() => {
     registrarAsistencia: (data) => request("/asistencia", { method: "POST", body: data }),
     verAsistenciaEvento: (eventoId) => request(`/eventos/${eventoId}/asistencia`),
     quitarAsistencia: (id) => request(`/asistencia/${id}`, { method: "DELETE" }),
+
+    previewImportarLista: (data) => request("/asistencia/importar/preview", { method: "POST", body: data }),
+    confirmarImportarLista: (data) => request("/asistencia/importar/confirmar", { method: "POST", body: data }),
   };
 })();

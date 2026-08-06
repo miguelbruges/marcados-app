@@ -91,6 +91,34 @@ class EventoOut(EventoCreate):
     id: int
 
 
+# --- Importación de lista pegada (WhatsApp u otro texto libre) ---
+class ImportarPreviewRequest(BaseModel):
+    actividad_id: int
+    fecha: date
+    texto: str
+
+
+class ImportarFilaOut(BaseModel):
+    texto_original: str
+    confianza: str
+    candidatos: list[MatchCandidatoOut]
+
+
+class ImportarPreviewResponse(BaseModel):
+    evento: EventoOut
+    filas: list[ImportarFilaOut]
+
+
+class ImportarConfirmarRequest(BaseModel):
+    evento_id: int
+    persona_ids: list[int]
+
+
+class ImportarConfirmarResponse(BaseModel):
+    guardados: int
+    ya_registrados: int
+
+
 class AsistenciaCreate(BaseModel):
     persona_id: int
     evento_id: int

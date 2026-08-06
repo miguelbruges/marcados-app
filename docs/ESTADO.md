@@ -22,6 +22,16 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
 - [x] `.gitignore` bloqueando Excel/DB/.env/credenciales.
 - [x] Plantilla de migración de Excel (`backend/migration/import_excel.py`) —
       no ejecutada contra datos reales.
+- [x] **Checkpoint visual (importación de lista tipo WhatsApp).** Parser que
+      separa nombres de un texto pegado ignorando encabezados ("asistencia
+      culto juvenil 25/07/2026"), endpoints `/asistencia/importar/preview`
+      (matching por línea, no guarda nada) y `/asistencia/importar/confirmar`
+      (guarda solo lo que el líder confirmó, idempotente). Frontend: página
+      "Jóvenes" de solo lectura y página "Importar" con las dos secciones
+      pedidas (coincidencias encontradas / pendientes por confirmar) y
+      selección manual por radio buttons. 31 tests backend, todos pasando.
+      Probado end-to-end en navegador con viewport móvil: el caso Anthony
+      (ambiguo) quedó correctamente en pendientes sin auto-guardarse.
 
 ## Pendiente — bloqueado por datos que no existen en este entorno
 
