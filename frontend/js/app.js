@@ -27,16 +27,25 @@ Router.on("/login", () => {
     <h1>Ingresar</h1>
     <form id="form-login">
       <label>Email</label>
-      <input type="email" id="login-email" required autocomplete="username">
+      <input type="email" id="login-email" required autocomplete="username"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
       <label>Contraseña</label>
-      <input type="password" id="login-password" required autocomplete="current-password">
+      <input type="password" id="login-password" required autocomplete="current-password"
+             autocapitalize="off" autocorrect="off" spellcheck="false">
       <button class="primary" type="submit">Entrar</button>
       <div class="error" id="login-error"></div>
+      <p class="hint" id="login-toggle-ver">
+        <label><input type="checkbox" id="login-ver-clave"> Mostrar contraseña</label>
+      </p>
     </form>
   `;
+  document.getElementById("login-ver-clave").addEventListener("change", (e) => {
+    document.getElementById("login-password").type = e.target.checked ? "text" : "password";
+  });
+
   document.getElementById("form-login").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const email = document.getElementById("login-email").value;
+    const email = document.getElementById("login-email").value.trim();
     const password = document.getElementById("login-password").value;
     const errorBox = document.getElementById("login-error");
     errorBox.textContent = "";
