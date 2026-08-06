@@ -1,0 +1,28 @@
+# Blueprint de Render (https://render.com/docs/blueprint-spec).
+# En el dashboard de Render: New > Blueprint > conectar este repo > Apply.
+#
+# Capa gratuita: el disco es efímero (los datos en SQLite pueden perderse si
+# el servicio se reinicia o duerme por inactividad). Sirve para probar que
+# la app funciona desde el celular — no para guardar datos reales todavía.
+# Cuando se decida Supabase/Postgres, solo hay que cambiar DATABASE_URL.
+services:
+  - type: web
+    name: marcados-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:///./marcados.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false # la URL de GitHub Pages, ej: https://tu-usuario.github.io
+      - key: ADMIN_BOOTSTRAP_EMAIL
+        sync: false # email del primer usuario admin
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false # contraseña del primer usuario admin

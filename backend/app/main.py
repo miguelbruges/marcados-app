@@ -4,8 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
 from app.routers import asistencia, auth, catalogos, dashboard, personas, seguimiento
+from app.services.bootstrap import bootstrap_admin
 
 
 @asynccontextmanager
@@ -14,6 +15,13 @@ async def lifespan(app: FastAPI):
     # gestiona con Alembic (ver backend/alembic/), nunca con create_all.
     if settings.environment == "development":
         Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        bootstrap_admin(db)
+    finally:
+        db.close()
+
     yield
 
 

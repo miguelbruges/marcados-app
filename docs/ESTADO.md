@@ -40,6 +40,15 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
       o la fecha de la reunión si se manda). Página frontend con el mismo
       buscador difuso que asistencia, enlazada desde "Jóvenes". 36 tests
       backend pasando. Probado end-to-end en navegador.
+- [x] **Preparado para desplegar y probar desde un celular real** (Render +
+      GitHub Pages): `render.yaml` (build/start con Alembic, admin bootstrap
+      por variables de entorno para no depender de shell en el host),
+      `.github/workflows/deploy-pages.yml` (publica `frontend/` inyectando
+      la URL del backend), pasos manuales documentados en el README. 39
+      tests backend pasando. **No desplegado todavía** — requiere que el
+      usuario cree las cuentas en Render y active GitHub Pages, no se puede
+      hacer desde este entorno (sin salida a internet general) ni sin sus
+      credenciales.
 
 ## Pendiente — bloqueado por datos que no existen en este entorno
 
@@ -71,9 +80,12 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
 - [ ] Crear el repo `marcados-app` en GitHub (la integración de esta sesión
       no tiene permiso para crear repos — el usuario debe crearlo vacío en
       github.com/new y luego se conecta y se hace push).
-- [ ] Deploy a producción (hosting backend/frontend, dominio, HTTPS).
-- [ ] Base de datos de producción (Postgres/Supabase) — requiere cuenta y
-      credenciales.
+- [ ] Aplicar el despliegue: cuenta en Render (Blueprint desde `render.yaml`)
+      + activar GitHub Pages con fuente "GitHub Actions" — pasos manuales,
+      ver README. Todo el código y la configuración ya están listos.
+- [ ] Base de datos persistente de producción (Postgres/Supabase) — el
+      despliegue en Render usa SQLite efímero mientras tanto, solo para
+      probar que la app funciona, no para datos reales.
 - [ ] Integración WhatsApp Business API — requiere cuenta Business y
       decisión de qué proveedor usar.
 
