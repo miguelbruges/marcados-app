@@ -62,6 +62,10 @@ Abrir `http://localhost:5500/index.html` (o desde el celular, la IP de la
 máquina en la misma red). Por defecto apunta a `http://localhost:8000`; para
 otro backend, definir `window.MARCADOS_API_URL` antes de cargar `js/api.js`.
 
+**En producción no hace falta ningún servidor aparte para el frontend** — ver
+la sección de despliegue más abajo. Este modo de servirlo por separado es
+solo para desarrollo local.
+
 ## Migración desde el Excel
 
 `backend/migration/import_excel.py` es la plantilla de migración — **no se
@@ -83,31 +87,26 @@ disponible en este entorno de desarrollo. Antes de correrla:
 - El semáforo espiritual y cualquier conclusión de seguimiento pastoral son
   siempre decisión humana — el sistema nunca las calcula automáticamente.
 
-## Desplegar para probar desde el celular (Render + GitHub Pages)
+## Desplegar para probar desde el celular (un solo servicio: Render)
 
-Pasos manuales — requieren tus cuentas, no se pueden hacer desde el asistente:
+FastAPI sirve el frontend directamente (mismo origen que la API) — no hace
+falta GitHub Pages ni ningún segundo servicio. Esto también evita problemas
+de CORS entre sitios distintos, que algunas redes móviles bloquean de formas
+difíciles de diagnosticar a distancia.
 
-**1. Backend en Render**
+Paso manual — requiere tu cuenta, no se puede hacer desde el asistente:
+
 1. En https://render.com: **New > Blueprint**, conectar este repo. Render lee
    `render.yaml` y propone el servicio `marcados-api` solo.
 2. Antes de aplicar, completar las variables marcadas como manuales:
-   - `CORS_ORIGINS`: la URL que te va a dar GitHub Pages, ej.
-     `https://tu-usuario.github.io` (se puede completar después y redeploy).
+   - `CORS_ORIGINS`: podés dejarla vacía o con cualquier valor — ya no es
+     necesaria para el uso normal de la app (mismo origen), solo importaría
+     si en el futuro otro sitio distinto necesita llamar a la API.
    - `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`: con qué usuario vas
-     a entrar la primera vez (se crea solo al arrancar).
+     a entrar la primera vez (se crea/actualiza solo al arrancar).
    - `SECRET_KEY` se genera sola.
-3. Deploy. Copiar la URL pública que te da Render (`https://marcados-api-xxxx.onrender.com`).
-
-**2. Frontend en GitHub Pages**
-1. En GitHub: **Settings > Pages > Source > GitHub Actions** (una sola vez).
-2. **Settings > Secrets and variables > Actions > Variables**: crear la
-   variable `MARCADOS_API_URL` con la URL de Render del paso anterior.
-3. Cualquier push a `master` que toque `frontend/` dispara el workflow
-   `.github/workflows/deploy-pages.yml` y publica el sitio solo.
-
-**3. Ajustar CORS**
-Volver a Render y actualizar `CORS_ORIGINS` con la URL real que te dio
-GitHub Pages, si no la sabías en el paso 1.
+3. Deploy. La URL que te da Render (`https://marcados-app.onrender.com` o
+   similar) **es la app entera** — abrila desde el celular y listo.
 
 **Importante — capa gratuita de Render:** el disco es efímero. Sirve para
 comprobar que la app funciona desde un celular real, pero los datos pueden

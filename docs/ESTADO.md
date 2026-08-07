@@ -40,15 +40,23 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
       o la fecha de la reunión si se manda). Página frontend con el mismo
       buscador difuso que asistencia, enlazada desde "Jóvenes". 36 tests
       backend pasando. Probado end-to-end en navegador.
-- [x] **Preparado para desplegar y probar desde un celular real** (Render +
-      GitHub Pages): `render.yaml` (build/start con Alembic, admin bootstrap
-      por variables de entorno para no depender de shell en el host),
-      `.github/workflows/deploy-pages.yml` (publica `frontend/` inyectando
-      la URL del backend), pasos manuales documentados en el README. 39
-      tests backend pasando. **No desplegado todavía** — requiere que el
-      usuario cree las cuentas en Render y active GitHub Pages, no se puede
-      hacer desde este entorno (sin salida a internet general) ni sin sus
-      credenciales.
+- [x] **Desplegado en Render.** Repo creado (`miguelbruges/marcados-app`),
+      backend live en `https://marcados-app.onrender.com`. `render.yaml`
+      (build/start con Alembic), admin bootstrap por variables de entorno
+      (sincroniza la contraseña en cada arranque, no solo la crea).
+- [x] **Frontend servido desde el mismo origen que la API** (no GitHub
+      Pages). Se abandonó el split Render+GitHub Pages: en pruebas reales
+      desde celular, la comunicación cross-origin entre esos dos dominios
+      fallaba de forma intermitente e indiagnosticable a distancia (un
+      pedido idéntico simulado desde una máquina con internet normal
+      funcionaba perfecto; el mismo pedido real desde el celular, en más de
+      un dispositivo, no). FastAPI monta `frontend/` como estáticos —
+      `render.yaml` no necesita segundo servicio, `CORS_ORIGINS` ya no es
+      crítico para el uso normal. 42 tests backend pasando.
+- [x] Bug de login corregido: el frontend mostraba "contraseña incorrecta"
+      para cualquier error (de red, CORS, lo que fuera), lo que hizo perder
+      mucho tiempo de diagnóstico durante el despliegue — ahora muestra el
+      error real.
 
 ## Pendiente — bloqueado por datos que no existen en este entorno
 
@@ -74,15 +82,16 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
 - [ ] Pantalla de seguimiento (el modelo y endpoints ya existen).
 - [ ] Dashboard más completo (fluctuantes, sin seguimiento, asistencia por
       período) — a propósito se dejó mínimo primero.
+- [ ] **Exportar a Excel bajo demanda** (pedido explícito del usuario): un
+      botón para generar un Excel descargable con los datos actuales de la
+      app (jóvenes, asistencia). Es exportación unidireccional app→Excel
+      para reportes puntuales — no es sincronización automática ni el Excel
+      vuelve a ser la fuente de datos.
+- [ ] Usuarios/roles: hoy solo existe el admin creado por variables de
+      entorno. Falta pantalla/endpoint para que el admin cree líderes.
 
 ## Pendiente — requiere credenciales o decisión de negocio del usuario
 
-- [ ] Crear el repo `marcados-app` en GitHub (la integración de esta sesión
-      no tiene permiso para crear repos — el usuario debe crearlo vacío en
-      github.com/new y luego se conecta y se hace push).
-- [ ] Aplicar el despliegue: cuenta en Render (Blueprint desde `render.yaml`)
-      + activar GitHub Pages con fuente "GitHub Actions" — pasos manuales,
-      ver README. Todo el código y la configuración ya están listos.
 - [ ] Base de datos persistente de producción (Postgres/Supabase) — el
       despliegue en Render usa SQLite efímero mientras tanto, solo para
       probar que la app funciona, no para datos reales.
@@ -91,8 +100,8 @@ repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
 
 ## Próxima acción recomendada
 
-1. Usuario crea el repo vacío en GitHub → se conecta y se hace el push
-   inicial de todo este trabajo.
+1. Usuario prueba el login en `https://marcados-app.onrender.com` desde el
+   celular (mismo origen ahora, debería resolver el error 405 persistente).
 2. Usuario indica dónde está el Excel baseline real → se ejecuta la
    migración con `--dry-run` primero.
-3. Con datos reales cargados, seguir con catálogos y el resto del dashboard.
+3. Seguir con usuarios/roles, exportar a Excel, y el resto del dashboard.

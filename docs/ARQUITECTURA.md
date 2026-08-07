@@ -51,7 +51,20 @@ escala (cientos de registros, no miles por segundo).
 
 La prioridad explícita del proyecto es que un líder abra un enlace desde su
 celular y funcione. HTML/CSS/JS vanilla servido como archivos estáticos
-cumple eso sin depender de Node, bundlers ni tiempos de build — cualquier
-servidor estático (o GitHub Pages, Netlify, etc.) lo sirve tal cual. Si el
+cumple eso sin depender de Node, bundlers ni tiempos de build. Si el
 frontend crece lo suficiente como para justificar un framework, ese es un
 cambio deliberado a evaluar más adelante, no una decisión por defecto.
+
+## Por qué el frontend se sirve desde el mismo servidor que la API
+
+Al principio el frontend vivía en GitHub Pages y la API en Render — dos
+orígenes distintos, comunicándose por CORS. En pruebas reales desde
+celular, esa comunicación cross-origin fallaba de forma intermitente y
+difícil de diagnosticar a distancia (confirmado: el mismo pedido funcionaba
+perfecto simulado desde una máquina con internet normal, pero fallaba
+consistentemente desde el celular real, en más de un dispositivo). En vez de
+perseguir la causa exacta (podía ser cualquier cosa entre el celular y el
+servidor, fuera de nuestro control), se eliminó la necesidad de CORS de
+raíz: FastAPI monta `frontend/` como archivos estáticos y sirve todo desde
+un solo origen (`app/main.py`, al final, después de las rutas de la API).
+GitHub Pages ya no es necesario.

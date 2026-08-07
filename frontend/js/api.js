@@ -1,9 +1,12 @@
 // Cliente HTTP mínimo. Sin dependencias externas a propósito — este frontend
 // no tiene paso de build, debe poder abrirse sirviendo estos archivos tal cual.
 const Api = (() => {
-  // Ajustar en despliegue real (o exponer vía variable inyectada por el servidor
-  // estático). En desarrollo local, FastAPI corre en 8000.
-  const BASE_URL = window.MARCADOS_API_URL || "http://localhost:8000";
+  // En producción, FastAPI sirve este archivo desde su propio dominio
+  // (mismo origen que la API — evita CORS entre sitios distintos, que
+  // algunas redes móviles bloquean de formas difíciles de diagnosticar).
+  // Solo en desarrollo local hace falta apuntar a otro puerto.
+  const esLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const BASE_URL = window.MARCADOS_API_URL || (esLocal ? "http://localhost:8000" : "");
 
   function token() {
     return localStorage.getItem("marcados_token");
