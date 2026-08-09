@@ -74,6 +74,7 @@ class Persona(Base):
     edad_manual: Mapped[int | None] = mapped_column(nullable=True)  # respaldo si no hay fecha exacta
 
     telefono: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    correo_electronico: Mapped[str | None] = mapped_column(String(180), nullable=True)
     genero: Mapped[str | None] = mapped_column(String(20), nullable=True)
     estado: Mapped[str | None] = mapped_column(String(40), nullable=True)  # activo/inactivo/fluctuante...
     encargado_lider: Mapped[str | None] = mapped_column(String(120), nullable=True)

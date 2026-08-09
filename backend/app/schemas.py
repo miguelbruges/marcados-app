@@ -23,6 +23,7 @@ class PersonaBase(BaseModel):
     fecha_nacimiento: date | None = None
     edad_manual: int | None = None
     telefono: str | None = None
+    correo_electronico: str | None = None
     genero: str | None = None
     estado: str | None = None
     encargado_lider: str | None = None
