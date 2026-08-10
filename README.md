@@ -105,6 +105,24 @@ Es una alerta **operativa**, nunca una conclusión espiritual — por eso vive
 separada de `semaforo_espiritual`, que siempre lo fija una persona a mano
 (regla no negociable, sección 21).
 
+## Ranking de invitaciones
+
+Pedido del usuario (2026-08-10): ver quién invitó más jóvenes que se
+registraron en un período (mes/trimestre/semestre), para que el equipo
+decida un reconocimiento si quiere — la app solo cuenta, no decide nada.
+
+`Persona.invitado_por_id` es un campo nuevo, estructurado (referencia a otra
+Persona ya existente), distinto de `como_llego` (texto libre histórico del
+Excel, ej. "Primo de Cristal", "Staff" — no sirve para este ranking porque
+no identifica una persona concreta del sistema). Solo se llena hacia
+adelante, al dar de alta un joven nuevo (buscador difuso reutilizado de
+asistencia/servidores) — los 120 registros históricos no lo tienen.
+
+`GET /personas/invitaciones-resumen?periodo=mes|trimestre|semestre` (o
+`?desde=...&hasta=...` para un rango explícito) devuelve el ranking
+ordenado. Visible para todos los roles con sesión — es parte del trabajo
+del equipo de consolidación, no información pastoral sensible.
+
 ## Exportar a Excel (plantilla real)
 
 `GET /export/excel` (solo admin) genera un `.xlsx` idéntico en diseño al

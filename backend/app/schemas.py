@@ -64,6 +64,7 @@ class PersonaBase(BaseModel):
     servidor: bool = False
     fecha_ingreso: date | None = None
     fecha_inicio_servicio: date | None = None
+    invitado_por_id: int | None = None
 
 
 class PersonaCreate(PersonaBase):
@@ -102,6 +103,7 @@ class PersonaUpdate(BaseModel):
     servidor: bool | None = None
     fecha_ingreso: date | None = None
     fecha_inicio_servicio: date | None = None
+    invitado_por_id: int | None = None
     activo: bool | None = None
 
 
@@ -115,6 +117,7 @@ class PersonaOut(PersonaBase):
     registro_historico: bool = False
     ficha_completa_pct: float = 100.0
     datos_faltantes: list[str] = []
+    invitado_por_nombre: str | None = None
 
 
 class MarcarServidorRequest(BaseModel):
@@ -136,6 +139,13 @@ class FichaIncompletaOut(BaseModel):
     nombre_completo: str
     ficha_completa_pct: float
     datos_faltantes: list[str]
+
+
+class InvitacionRankingOut(BaseModel):
+    persona_id: int
+    id_unico: str
+    nombre_completo: str
+    cantidad: int
 
 
 class PersonaAlertasOut(BaseModel):

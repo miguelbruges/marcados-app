@@ -156,7 +156,8 @@ Router.on("/personas", async () => {
     <h1>Jóvenes registrados</h1>
     <p>
       <a href="#/servidores/nuevo">+ Marcar nuevo servidor (reunión STAFF)</a><br>
-      <a href="#/personas/incompletas">Ver fichas incompletas</a>
+      <a href="#/personas/incompletas">Ver fichas incompletas</a><br>
+      <a href="#/invitaciones">Ranking de invitaciones</a>
     </p>
     <div id="lista-personas" class="hint">Cargando...</div>
   `;
@@ -380,6 +381,50 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
     });
   }
 }
+
+// --- Ranking de invitaciones (pedido del usuario, 2026-08-10) ---
+Router.on("/invitaciones", async () => {
+  if (!requiereSesion()) return;
+  $app.innerHTML = `
+    <h1>Ranking de invitaciones</h1>
+    <p class="hint">Quién invitó más jóvenes que se registraron en el período. Información para el equipo — qué hacer con esto (un reconocimiento, nada) lo deciden ustedes.</p>
+    <div>
+      <button type="button" class="secundario periodo-btn" data-periodo="mes">Este mes</button>
+      <button type="button" class="secundario periodo-btn" data-periodo="trimestre">Este trimestre</button>
+      <button type="button" class="secundario periodo-btn" data-periodo="semestre">Este semestre</button>
+    </div>
+    <div id="lista-invitaciones" class="hint">Cargando...</div>
+  `;
+
+  async function cargar(periodo) {
+    const cont = document.getElementById("lista-invitaciones");
+    cont.innerHTML = "Cargando...";
+    try {
+      const ranking = await Api.invitacionesResumen(periodo);
+      if (!ranking.length) {
+        cont.innerHTML = `<p class="hint">Nadie registrado con "quién lo invitó" en este período todavía.</p>`;
+        return;
+      }
+      cont.innerHTML = ranking
+        .map(
+          (r, i) => `
+        <div class="card">
+          <strong>${i + 1}. ${r.nombre_completo}</strong>
+          <div class="hint">${r.id_unico} — invitó a ${r.cantidad} joven${r.cantidad === 1 ? "" : "es"}</div>
+        </div>
+      `
+        )
+        .join("");
+    } catch (e) {
+      cont.innerHTML = `<div class="error">${e.message}</div>`;
+    }
+  }
+
+  document.querySelectorAll(".periodo-btn").forEach((btn) => {
+    btn.addEventListener("click", () => cargar(btn.dataset.periodo));
+  });
+  cargar("mes");
+});
 
 // --- Fichas incompletas (sección 17 del handoff) ---
 Router.on("/personas/incompletas", async () => {
@@ -741,6 +786,10 @@ Router.on("/personas/nueva", async () => {
       </select>
       <label>Dirección</label>
       <input type="text" name="direccion">
+      <label>¿Quién lo invitó?</label>
+      <p class="hint">Para el ranking de invitaciones — opcional.</p>
+      <div id="invitador-slot"></div>
+      <div id="invitador-elegido" class="hint"></div>
       <label>Notas</label>
       <textarea name="notas" rows="3"></textarea>
       <button class="primary" type="submit">Guardar</button>
@@ -748,6 +797,17 @@ Router.on("/personas/nueva", async () => {
       <div id="persona-ok"></div>
     </form>
   `;
+
+  let invitadoPorId = null;
+  const buscadorInvitador = crearBuscadorPersonas({
+    placeholder: "Buscar quién lo invitó...",
+    onSeleccionar: (candidato) => {
+      invitadoPorId = candidato.persona_id;
+      document.getElementById("invitador-elegido").textContent = `Invitado por: ${candidato.nombre_completo} (tocá "Agregar joven" de nuevo para cambiar)`;
+    },
+  });
+  document.getElementById("invitador-slot").appendChild(buscadorInvitador);
+
   document.getElementById("form-persona").addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -756,6 +816,7 @@ Router.on("/personas/nueva", async () => {
     for (const campo of ["fecha_nacimiento", "telefono", "genero", "direccion", "notas"]) {
       if (data[campo] === "") delete data[campo];
     }
+    if (invitadoPorId) data.invitado_por_id = invitadoPorId;
     const errorBox = document.getElementById("persona-error");
     errorBox.textContent = "";
     try {
@@ -764,6 +825,8 @@ Router.on("/personas/nueva", async () => {
         `<div class="card">Guardado: <strong>${persona.nombres} ${persona.apellidos}</strong> (${persona.id_unico})<br>
          <span class="hint">Fecha de ingreso registrada automáticamente: ${persona.fecha_ingreso}</span></div>`;
       form.reset();
+      invitadoPorId = null;
+      document.getElementById("invitador-elegido").textContent = "";
     } catch (e2) {
       errorBox.textContent = `No se pudo guardar: ${e2.message}`;
     }

@@ -107,6 +107,12 @@ class Persona(Base):
     fecha_ingreso: Mapped[date | None] = mapped_column(Date, nullable=True)
     fecha_inicio_servicio: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    # Quién invitó a esta persona (otra Persona ya existente en el sistema).
+    # Distinto de 'como_llego' (texto libre histórico, ej. "Primo de Cristal",
+    # "Staff") — este campo es una referencia estructurada, solo se llena
+    # hacia adelante, y alimenta el ranking de invitaciones por período.
+    invitado_por_id: Mapped[int | None] = mapped_column(ForeignKey("personas.id"), nullable=True)
+
     # El semáforo espiritual es un juicio pastoral: lo fija una persona, nunca un
     # cálculo automático de asistencia. Ver principio no negociable del proyecto.
     semaforo_espiritual: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -125,10 +131,15 @@ class Persona(Base):
     areas: Mapped[list["PersonaArea"]] = relationship(back_populates="persona")
     asistencias: Mapped[list["Asistencia"]] = relationship(back_populates="persona")
     seguimientos: Mapped[list["Seguimiento"]] = relationship(back_populates="persona")
+    invitado_por: Mapped["Persona | None"] = relationship(remote_side="Persona.id")
 
     @property
     def nombre_completo(self) -> str:
         return f"{self.nombres} {self.apellidos}".strip()
+
+    @property
+    def invitado_por_nombre(self) -> str | None:
+        return self.invitado_por.nombre_completo if self.invitado_por else None
 
     @property
     def ficha_completa_pct(self) -> float:

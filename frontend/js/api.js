@@ -73,6 +73,7 @@ const Api = (() => {
     marcarServidor: (personaId, fecha_inicio_servicio) =>
       request(`/personas/${personaId}/marcar-servidor`, { method: "POST", body: { fecha_inicio_servicio } }),
     fichasIncompletas: () => request("/personas/fichas-incompletas"),
+    invitacionesResumen: (periodo) => request(`/personas/invitaciones-resumen?periodo=${periodo}`),
     historialSeguimiento: (personaId) => request(`/seguimiento/persona/${personaId}`),
     crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
     catalogo: (tipo) => request(`/catalogos/${tipo}`),

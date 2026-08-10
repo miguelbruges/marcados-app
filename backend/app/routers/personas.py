@@ -11,6 +11,7 @@ from app.matching import buscar_candidatos
 from app.models import Persona, Usuario
 from app.schemas import (
     FichaIncompletaOut,
+    InvitacionRankingOut,
     MarcarServidorRequest,
     MatchResponse,
     PersonaAlertasOut,
@@ -21,6 +22,7 @@ from app.schemas import (
 from app.services.alertas_asistencia import calcular_inasistencias_consecutivas, calcular_semaforo
 from app.services.bitacora import registrar_cambios
 from app.services.identidad import siguiente_id_unico
+from app.services.invitaciones import calcular_periodo, ranking_invitaciones
 
 router = APIRouter(prefix="/personas", tags=["personas"])
 
@@ -52,6 +54,27 @@ def listar_fichas_incompletas(
     incompletas = [p for p in personas if p.ficha_completa_pct < corte]
     incompletas.sort(key=lambda p: p.ficha_completa_pct)
     return incompletas
+
+
+@router.get("/invitaciones-resumen", response_model=list[InvitacionRankingOut])
+def invitaciones_resumen(
+    periodo: str = Query(default="mes", pattern="^(mes|trimestre|semestre)$"),
+    desde: date | None = None,
+    hasta: date | None = None,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Ranking de quién invitó más jóvenes que se registraron en el período
+    (pedido del usuario, 2026-08-10) — para reconocer a quien más trae gente
+    nueva. La app solo cuenta y ordena; qué hacer con eso lo decide el
+    equipo. Visible para todos los roles con sesión: es parte del trabajo
+    del equipo de consolidación, no información pastoral sensible."""
+    if desde and hasta:
+        rango_desde, rango_hasta = desde, hasta
+    else:
+        rango_desde, rango_hasta = calcular_periodo(periodo)
+    resultado = ranking_invitaciones(db, rango_desde, rango_hasta)
+    return [InvitacionRankingOut(**r.__dict__) for r in resultado]
 
 
 @router.get("/{persona_id}", response_model=PersonaOut)
@@ -92,6 +115,8 @@ def crear_persona(
     data: PersonaCreate, db: Session = Depends(get_db), usuario: Usuario = Depends(get_current_user)
 ):
     campos = data.model_dump()
+    if campos.get("invitado_por_id") is not None and not db.get(Persona, campos["invitado_por_id"]):
+        raise HTTPException(status_code=404, detail="La persona indicada como 'invitado_por' no existe")
     if campos.get("fecha_ingreso") is None:
         campos["fecha_ingreso"] = date.today()  # se registra sola: nadie tiene que acordarse de escribirla
     # registro_historico=False por defecto: esto es alguien nuevo, no un migrado del Excel.
@@ -121,8 +146,16 @@ def editar_persona(
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
+    campos_nuevos = data.model_dump(exclude_unset=True)
+    invitado_por_id = campos_nuevos.get("invitado_por_id")
+    if invitado_por_id is not None:
+        if invitado_por_id == persona_id:
+            raise HTTPException(status_code=422, detail="Una persona no puede haberse invitado a sí misma")
+        if not db.get(Persona, invitado_por_id):
+            raise HTTPException(status_code=404, detail="La persona indicada como 'invitado_por' no existe")
+
     cambios = {}
-    for campo, valor_nuevo in data.model_dump(exclude_unset=True).items():
+    for campo, valor_nuevo in campos_nuevos.items():
         valor_anterior = getattr(persona, campo)
         if valor_anterior != valor_nuevo:
             cambios[campo] = (valor_anterior, valor_nuevo)
