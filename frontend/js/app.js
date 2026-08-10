@@ -63,7 +63,8 @@ Router.on("/login", () => {
 // --- Panel ---
 Router.on("/panel", async () => {
   if (!requiereSesion()) return;
-  $app.innerHTML = `<h1>Hola, ${Api.nombre()}</h1><div id="stats" class="stat-grid"></div>`;
+  const linkUsuarios = Api.rol() === "admin" ? `<p><a href="#/usuarios">+ Gestionar usuarios (líderes)</a></p>` : "";
+  $app.innerHTML = `<h1>Hola, ${Api.nombre()}</h1>${linkUsuarios}<div id="stats" class="stat-grid"></div>`;
   try {
     const r = await Api.dashboardResumen();
     document.getElementById("stats").innerHTML = `
@@ -148,6 +149,83 @@ Router.on("/servidores/nuevo", () => {
     },
   });
   document.getElementById("serv-buscador-slot").appendChild(buscador);
+});
+
+// --- Usuarios (solo admin) ---
+Router.on("/usuarios", async () => {
+  if (!requiereSesion()) return;
+  if (Api.rol() !== "admin") {
+    $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
+    return;
+  }
+  $app.innerHTML = `
+    <h1>Usuarios</h1>
+    <form id="form-usuario">
+      <label>Nombre</label>
+      <input type="text" id="usr-nombre" required>
+      <label>Email</label>
+      <input type="email" id="usr-email" required autocapitalize="off" autocorrect="off">
+      <label>Contraseña inicial</label>
+      <input type="text" id="usr-password" required>
+      <label>Rol</label>
+      <select id="usr-rol">
+        <option value="lider">Líder</option>
+        <option value="encargado">Encargado</option>
+        <option value="consolidacion">Consolidación</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button class="primary" type="submit">Crear usuario</button>
+      <div class="error" id="usr-error"></div>
+    </form>
+    <h2>Existentes</h2>
+    <div id="lista-usuarios" class="hint">Cargando...</div>
+  `;
+
+  async function cargarUsuarios() {
+    const cont = document.getElementById("lista-usuarios");
+    try {
+      const usuarios = await Api.usuarios();
+      cont.innerHTML = usuarios
+        .map(
+          (u) => `
+        <div class="card">
+          <strong>${u.nombre}</strong> ${u.activo ? "" : '<span class="badge BAJA">inactivo</span>'}
+          <div class="hint">${u.email} · ${u.rol}</div>
+          ${u.activo ? `<button class="tap-btn" type="button" data-id="${u.id}">Desactivar</button>` : ""}
+        </div>
+      `
+        )
+        .join("");
+      cont.querySelectorAll("button[data-id]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          await Api.desactivarUsuario(btn.dataset.id);
+          cargarUsuarios();
+        });
+      });
+    } catch (e) {
+      cont.innerHTML = `<div class="error">${e.message}</div>`;
+    }
+  }
+
+  document.getElementById("form-usuario").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById("usr-error");
+    errorBox.textContent = "";
+    try {
+      await Api.crearUsuario({
+        nombre: document.getElementById("usr-nombre").value,
+        email: document.getElementById("usr-email").value.trim(),
+        password: document.getElementById("usr-password").value,
+        rol: document.getElementById("usr-rol").value,
+      });
+      e.target.reset();
+      cargarUsuarios();
+    } catch (e2) {
+      errorBox.textContent = e2.message;
+    }
+  });
+
+  cargarUsuarios();
 });
 
 // --- Registrar asistencia ---

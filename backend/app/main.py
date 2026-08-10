@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
-from app.routers import asistencia, auth, catalogos, dashboard, personas, seguimiento
+from app.routers import asistencia, auth, catalogos, dashboard, personas, seguimiento, usuarios
 from app.services.bootstrap import bootstrap_admin
 
 
@@ -43,6 +43,7 @@ app.include_router(asistencia.router)
 app.include_router(catalogos.router)
 app.include_router(dashboard.router)
 app.include_router(seguimiento.router)
+app.include_router(usuarios.router)
 
 
 @app.get("/health")

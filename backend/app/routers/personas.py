@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app.matching import buscar_candidatos
-from app.models import Persona
-from app.schemas import MarcarServidorRequest, MatchResponse, PersonaCreate, PersonaOut
+from app.models import Persona, Usuario
+from app.schemas import MarcarServidorRequest, MatchResponse, PersonaCreate, PersonaOut, PersonaUpdate
+from app.services.bitacora import registrar_cambios
 from app.services.identidad import siguiente_id_unico
 
 router = APIRouter(prefix="/personas", tags=["personas"])
@@ -35,14 +36,50 @@ def obtener_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(ge
 
 
 @router.post("", response_model=PersonaOut, status_code=201)
-def crear_persona(data: PersonaCreate, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def crear_persona(
+    data: PersonaCreate, db: Session = Depends(get_db), usuario: Usuario = Depends(get_current_user)
+):
     campos = data.model_dump()
     if campos.get("fecha_ingreso") is None:
         campos["fecha_ingreso"] = date.today()  # se registra sola: nadie tiene que acordarse de escribirla
+    # registro_historico=False por defecto: esto es alguien nuevo, no un migrado del Excel.
     persona = Persona(id_unico=siguiente_id_unico(db), **campos)
     db.add(persona)
+    db.flush()
+    registrar_cambios(
+        db,
+        tabla="personas",
+        registro_id=persona.id,
+        usuario_id=usuario.id,
+        cambios={"__creacion__": (None, persona.id_unico)},
+    )
     db.commit()
     db.refresh(persona)
+    return persona
+
+
+@router.patch("/{persona_id}", response_model=PersonaOut)
+def editar_persona(
+    persona_id: int,
+    data: PersonaUpdate,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(get_current_user),
+):
+    persona = db.get(Persona, persona_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+    cambios = {}
+    for campo, valor_nuevo in data.model_dump(exclude_unset=True).items():
+        valor_anterior = getattr(persona, campo)
+        if valor_anterior != valor_nuevo:
+            cambios[campo] = (valor_anterior, valor_nuevo)
+            setattr(persona, campo, valor_nuevo)
+
+    if cambios:
+        registrar_cambios(db, tabla="personas", registro_id=persona.id, usuario_id=usuario.id, cambios=cambios)
+        db.commit()
+        db.refresh(persona)
     return persona
 
 
@@ -51,7 +88,7 @@ def marcar_nuevo_servidor(
     persona_id: int,
     data: MarcarServidorRequest,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user),
+    usuario: Usuario = Depends(get_current_user),
 ):
     """Para la reunión de servidores (STAFF): marca a un joven ya registrado
     como servidor y deja la fecha en que se integró. Si no se manda fecha,
@@ -60,8 +97,19 @@ def marcar_nuevo_servidor(
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
 
+    nueva_fecha = data.fecha_inicio_servicio or date.today()
+    registrar_cambios(
+        db,
+        tabla="personas",
+        registro_id=persona.id,
+        usuario_id=usuario.id,
+        cambios={
+            "servidor": (persona.servidor, True),
+            "fecha_inicio_servicio": (persona.fecha_inicio_servicio, nueva_fecha),
+        },
+    )
     persona.servidor = True
-    persona.fecha_inicio_servicio = data.fecha_inicio_servicio or date.today()
+    persona.fecha_inicio_servicio = nueva_fecha
     db.commit()
     db.refresh(persona)
     return persona

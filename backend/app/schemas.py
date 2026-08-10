@@ -16,6 +16,23 @@ class TokenResponse(BaseModel):
     nombre: str
 
 
+# --- Usuarios (gestión, solo admin) ---
+class UsuarioCreate(BaseModel):
+    nombre: str
+    email: EmailStr
+    password: str
+    rol: str = "lider"  # admin | lider | encargado | consolidacion
+
+
+class UsuarioOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nombre: str
+    email: str
+    rol: str
+    activo: bool
+
+
 # --- Persona ---
 class PersonaBase(BaseModel):
     nombres: str
@@ -50,6 +67,38 @@ class PersonaCreate(PersonaBase):
     pass
 
 
+class PersonaUpdate(BaseModel):
+    """Todos los campos opcionales — PATCH solo aplica lo que venga."""
+
+    nombres: str | None = None
+    apellidos: str | None = None
+    fecha_nacimiento: date | None = None
+    edad_manual: int | None = None
+    telefono: str | None = None
+    correo_electronico: str | None = None
+    genero: str | None = None
+    estado: str | None = None
+    encargado_lider: str | None = None
+    bautizado: bool | None = None
+    fecha_bautismo: date | None = None
+    estudio_biblico: str | None = None
+    instagram: str | None = None
+    facebook: str | None = None
+    direccion: str | None = None
+    contacto_emergencia: str | None = None
+    telefono_emergencia: str | None = None
+    grupo_sanguineo: str | None = None
+    eps: str | None = None
+    talla: str | None = None
+    como_llego: str | None = None
+    fuente_datos: str | None = None
+    notas: str | None = None
+    servidor: bool | None = None
+    fecha_ingreso: date | None = None
+    fecha_inicio_servicio: date | None = None
+    activo: bool | None = None
+
+
 class PersonaOut(PersonaBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,6 +106,7 @@ class PersonaOut(PersonaBase):
     id_unico: str
     activo: bool
     semaforo_espiritual: str | None = None
+    registro_historico: bool = False
 
 
 class MarcarServidorRequest(BaseModel):

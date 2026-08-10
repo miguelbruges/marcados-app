@@ -77,5 +77,9 @@ const Api = (() => {
 
     previewImportarLista: (data) => request("/asistencia/importar/preview", { method: "POST", body: data }),
     confirmarImportarLista: (data) => request("/asistencia/importar/confirmar", { method: "POST", body: data }),
+
+    usuarios: () => request("/usuarios"),
+    crearUsuario: (data) => request("/usuarios", { method: "POST", body: data }),
+    desactivarUsuario: (id) => request(`/usuarios/${id}/desactivar`, { method: "PATCH" }),
   };
 })();

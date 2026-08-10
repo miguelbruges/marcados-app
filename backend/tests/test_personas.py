@@ -82,3 +82,48 @@ def test_marcar_nuevo_servidor_con_fecha_explicita_de_la_reunion_staff(client, a
 def test_marcar_nuevo_servidor_persona_inexistente_da_404(client, auth_headers):
     resp = client.post("/personas/9999/marcar-servidor", json={}, headers=auth_headers)
     assert resp.status_code == 404
+
+
+def test_persona_nueva_no_es_registro_historico(client, auth_headers):
+    resp = client.post("/personas", json={"nombres": "Sofia", "apellidos": "Hernandez"}, headers=auth_headers)
+    assert resp.json()["registro_historico"] is False
+
+
+def test_editar_persona_aplica_solo_los_campos_enviados(client, auth_headers):
+    persona = client.post(
+        "/personas", json={"nombres": "Sofia", "apellidos": "Hernandez", "telefono": "3000000000"},
+        headers=auth_headers,
+    ).json()
+
+    resp = client.patch(f"/personas/{persona['id']}", json={"telefono": "3001111111"}, headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["telefono"] == "3001111111"
+    assert body["nombres"] == "Sofia"  # no tocado, sigue igual
+
+
+def test_editar_persona_inexistente_da_404(client, auth_headers):
+    resp = client.patch("/personas/9999", json={"telefono": "300"}, headers=auth_headers)
+    assert resp.status_code == 404
+
+
+def test_editar_persona_registra_bitacora_solo_de_lo_que_cambio(client, auth_headers, db_session):
+    from app.models import Bitacora
+
+    persona = client.post(
+        "/personas", json={"nombres": "Sofia", "apellidos": "Hernandez", "telefono": "3000000000"},
+        headers=auth_headers,
+    ).json()
+
+    # mismo valor -> no debe generar bitacora
+    client.patch(f"/personas/{persona['id']}", json={"telefono": "3000000000"}, headers=auth_headers)
+    sin_cambio = db_session.query(Bitacora).filter(Bitacora.campo == "telefono").count()
+    assert sin_cambio == 0
+
+    # valor distinto -> si genera bitacora con antes/despues
+    client.patch(f"/personas/{persona['id']}", json={"telefono": "3009999999"}, headers=auth_headers)
+    registro = db_session.query(Bitacora).filter(Bitacora.campo == "telefono").first()
+    assert registro is not None
+    assert registro.valor_anterior == "3000000000"
+    assert registro.valor_nuevo == "3009999999"
+    assert registro.tabla == "personas"

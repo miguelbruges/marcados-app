@@ -18,6 +18,8 @@ from app.database import Base
 class RolUsuario(str, enum.Enum):
     ADMIN = "admin"
     LIDER = "lider"
+    ENCARGADO = "encargado"
+    CONSOLIDACION = "consolidacion"
 
 
 class Usuario(Base):
@@ -105,6 +107,11 @@ class Persona(Base):
     # El semáforo espiritual es un juicio pastoral: lo fija una persona, nunca un
     # cálculo automático de asistencia. Ver principio no negociable del proyecto.
     semaforo_espiritual: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+    # Distingue los registros que llegaron por la migración inicial del Excel
+    # (históricos: nunca se les inventa una fecha de ingreso) de los que se
+    # crean desde la app en adelante (esos sí reciben fecha_ingreso = hoy).
+    registro_historico: Mapped[bool] = mapped_column(Boolean, default=False)
 
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -198,3 +205,19 @@ class Seguimiento(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     persona: Mapped["Persona"] = relationship(back_populates="seguimientos")
+
+
+class Bitacora(Base):
+    """Auditoría de cambios: quién tocó qué campo, con qué valor anterior y
+    nuevo, y cuándo. Se escribe, nunca se edita ni se borra desde la app."""
+
+    __tablename__ = "bitacora"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tabla: Mapped[str] = mapped_column(String(60), index=True)
+    registro_id: Mapped[int] = mapped_column(index=True)
+    campo: Mapped[str] = mapped_column(String(80))
+    valor_anterior: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valor_nuevo: Mapped[str | None] = mapped_column(Text, nullable=True)
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
