@@ -13,10 +13,12 @@ from app.schemas import (
     FichaIncompletaOut,
     MarcarServidorRequest,
     MatchResponse,
+    PersonaAlertasOut,
     PersonaCreate,
     PersonaOut,
     PersonaUpdate,
 )
+from app.services.alertas_asistencia import calcular_inasistencias_consecutivas, calcular_semaforo
 from app.services.bitacora import registrar_cambios
 from app.services.identidad import siguiente_id_unico
 
@@ -58,6 +60,30 @@ def obtener_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(ge
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
     return persona
+
+
+@router.get("/{persona_id}/alertas", response_model=PersonaAlertasOut)
+def alertas_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Alertas operativas de una persona: semáforo de asistencia (sección
+    15/21 del handoff) + inasistencias consecutivas + ficha incompleta.
+    Nunca es una conclusión pastoral — eso lo decide un humano."""
+    persona = db.get(Persona, persona_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+    semaforo = calcular_semaforo(db, persona_id)
+    return PersonaAlertasOut(
+        id=persona.id,
+        id_unico=persona.id_unico,
+        nombre_completo=persona.nombre_completo,
+        asistencias_ventana=semaforo.asistencias_ventana,
+        reuniones_evaluables_ventana=semaforo.reuniones_evaluables_ventana,
+        porcentaje_asistencia=semaforo.porcentaje,
+        nivel_asistencia=semaforo.nivel,
+        inasistencias_consecutivas=calcular_inasistencias_consecutivas(db, persona_id),
+        ficha_completa_pct=persona.ficha_completa_pct,
+        datos_faltantes=persona.datos_faltantes,
+    )
 
 
 @router.post("", response_model=PersonaOut, status_code=201)

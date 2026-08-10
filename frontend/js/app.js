@@ -82,6 +82,22 @@ Router.on("/panel", async () => {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }
 
+  try {
+    const a = await Api.alertasResumen();
+    $app.innerHTML += `
+      <h2>Semáforo de asistencia (últimos 30 días)</h2>
+      <p class="hint">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona.</p>
+      <div class="stat-grid">
+        ${stat(a.verde, "Verde")}
+        ${stat(a.amarillo, "Amarillo")}
+        ${stat(a.rojo, "Rojo")}
+        ${stat(a.sin_datos, "Sin datos")}
+      </div>
+    `;
+  } catch (e) {
+    $app.innerHTML += `<div class="error">${e.message}</div>`;
+  }
+
   if (esAdmin) {
     document.getElementById("btn-exportar-excel").addEventListener("click", async (e) => {
       e.preventDefault();

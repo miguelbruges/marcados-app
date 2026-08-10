@@ -62,6 +62,8 @@ const Api = (() => {
     setSession,
 
     dashboardResumen: () => request("/dashboard/resumen"),
+    alertasResumen: () => request("/dashboard/alertas-resumen"),
+    alertasPersona: (personaId) => request(`/personas/${personaId}/alertas`),
 
     personas: () => request("/personas"),
     crearPersona: (data) => request("/personas", { method: "POST", body: data }),

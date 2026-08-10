@@ -93,6 +93,18 @@ fichas por debajo del umbral configurado (`FICHA_COMPLETA_UMBRAL_PORCENTAJE`,
 70% por defecto) — nunca bloquea el registro de nadie, es solo información
 operativa para priorizar seguimiento.
 
+## Motor de alertas de asistencia
+
+`GET /personas/{id}/alertas` y `GET /dashboard/alertas-resumen` replican el
+'Semáforo de asistencia' del Excel (columnas AG-AJ, sección 15/21 del
+handoff): % de asistencia en una ventana de días (30 por defecto,
+`ALERTAS_VENTANA_DIAS`), verde/amarillo/rojo/sin datos según umbrales
+configurables (`ALERTAS_UMBRAL_VERDE`/`ALERTAS_UMBRAL_AMARILLO`, 85%/50% por
+defecto — mismos valores que trae el Excel), más inasistencias consecutivas.
+Es una alerta **operativa**, nunca una conclusión espiritual — por eso vive
+separada de `semaforo_espiritual`, que siempre lo fija una persona a mano
+(regla no negociable, sección 21).
+
 ## Exportar a Excel (plantilla real)
 
 `GET /export/excel` (solo admin) genera un `.xlsx` idéntico en diseño al

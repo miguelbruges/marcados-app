@@ -138,6 +138,23 @@ class FichaIncompletaOut(BaseModel):
     datos_faltantes: list[str]
 
 
+class PersonaAlertasOut(BaseModel):
+    """Alertas OPERATIVAS (sección 21 del handoff): nunca una conclusión
+    espiritual — nivel_asistencia es aparte de semaforo_espiritual, que
+    siempre lo fija una persona a mano."""
+
+    id: int
+    id_unico: str
+    nombre_completo: str
+    asistencias_ventana: int
+    reuniones_evaluables_ventana: int
+    porcentaje_asistencia: float | None
+    nivel_asistencia: str
+    inasistencias_consecutivas: int
+    ficha_completa_pct: float
+    datos_faltantes: list[str]
+
+
 # --- Matching ---
 class MatchCandidatoOut(BaseModel):
     persona_id: int

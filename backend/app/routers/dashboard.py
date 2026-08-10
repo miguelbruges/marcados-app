@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import Asistencia, Evento, Persona
+from app.services.alertas_asistencia import resumen_niveles
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -35,3 +36,11 @@ def resumen(db: Session = Depends(get_db), _=Depends(get_current_user)):
         "sirviendo": sirviendo,
         "asistieron_ultimos_30_dias": asistieron_30d,
     }
+
+
+@router.get("/alertas-resumen")
+def alertas_resumen(db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Cuántas personas activas caen en cada nivel del semáforo OPERATIVO de
+    asistencia (sección 15/21 del handoff). Alerta operativa, no espiritual
+    — el detalle por persona está en GET /personas/{id}/alertas."""
+    return resumen_niveles(db)

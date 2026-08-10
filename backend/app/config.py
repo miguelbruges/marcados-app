@@ -15,6 +15,15 @@ class Settings(BaseSettings):
     # personales de menores de edad. Si no está configurada, /export/excel
     # responde 503 en vez de fallar de forma confusa.
     excel_template_path: str | None = None
+    # Sección 15 (columnas AG-AJ) y sección 21 del handoff: parámetros del
+    # semáforo operativo de asistencia. Mismos valores que trae el Excel
+    # real (nombres definidos ParamVentanaDias/ParamUmbralVerde/
+    # ParamUmbralAmarillo) — configurables, no una constante en el código.
+    # Es una alerta OPERATIVA de asistencia, nunca una conclusión espiritual
+    # (eso es 'semaforo_espiritual' en Persona, siempre manual).
+    alertas_ventana_dias: int = 30
+    alertas_umbral_verde: float = 0.85
+    alertas_umbral_amarillo: float = 0.50
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
