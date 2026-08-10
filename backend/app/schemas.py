@@ -113,6 +113,8 @@ class PersonaOut(PersonaBase):
     activo: bool
     semaforo_espiritual: str | None = None
     registro_historico: bool = False
+    ficha_completa_pct: float = 100.0
+    datos_faltantes: list[str] = []
 
 
 class MarcarServidorRequest(BaseModel):
@@ -125,6 +127,15 @@ class PersonaResumen(BaseModel):
     nombre_completo: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FichaIncompletaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    id_unico: str
+    nombre_completo: str
+    ficha_completa_pct: float
+    datos_faltantes: list[str]
 
 
 # --- Matching ---

@@ -4,11 +4,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.matching import buscar_candidatos
 from app.models import Persona, Usuario
-from app.schemas import MarcarServidorRequest, MatchResponse, PersonaCreate, PersonaOut, PersonaUpdate
+from app.schemas import (
+    FichaIncompletaOut,
+    MarcarServidorRequest,
+    MatchResponse,
+    PersonaCreate,
+    PersonaOut,
+    PersonaUpdate,
+)
 from app.services.bitacora import registrar_cambios
 from app.services.identidad import siguiente_id_unico
 
@@ -25,6 +33,23 @@ def listar_personas(
     if activo is not None:
         q = q.where(Persona.activo == activo)
     return db.scalars(q.order_by(Persona.apellidos, Persona.nombres)).all()
+
+
+@router.get("/fichas-incompletas", response_model=list[FichaIncompletaOut])
+def listar_fichas_incompletas(
+    umbral: float | None = Query(
+        default=None, description="Corte de % completitud; por defecto el de configuración"
+    ),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Lista filtrable de fichas incompletas, ordenada por menor completitud
+    primero (sección 17 del handoff). Nunca bloquea nada — es solo lectura."""
+    corte = umbral if umbral is not None else settings.ficha_completa_umbral_porcentaje
+    personas = db.scalars(select(Persona).where(Persona.activo == True)).all()  # noqa: E712
+    incompletas = [p for p in personas if p.ficha_completa_pct < corte]
+    incompletas.sort(key=lambda p: p.ficha_completa_pct)
+    return incompletas
 
 
 @router.get("/{persona_id}", response_model=PersonaOut)

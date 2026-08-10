@@ -83,12 +83,27 @@ function stat(num, label) {
   return `<div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 }
 
+// --- Ficha completa: badge de completitud (sección 17 del handoff) ---
+function nivelFicha(pct) {
+  if (pct >= 85) return "ALTA";
+  if (pct >= 70) return "MEDIA";
+  return "BAJA";
+}
+
+function badgeFicha(p) {
+  if (p.ficha_completa_pct === undefined) return "";
+  return `<span class="badge ${nivelFicha(p.ficha_completa_pct)}">${p.ficha_completa_pct}% ficha</span>`;
+}
+
 // --- Ver jóvenes registrados ---
 Router.on("/personas", async () => {
   if (!requiereSesion()) return;
   $app.innerHTML = `
     <h1>Jóvenes registrados</h1>
-    <p><a href="#/servidores/nuevo">+ Marcar nuevo servidor (reunión STAFF)</a></p>
+    <p>
+      <a href="#/servidores/nuevo">+ Marcar nuevo servidor (reunión STAFF)</a><br>
+      <a href="#/personas/incompletas">Ver fichas incompletas</a>
+    </p>
     <div id="lista-personas" class="hint">Cargando...</div>
   `;
   try {
@@ -102,12 +117,43 @@ Router.on("/personas", async () => {
       .map(
         (p) => `
       <div class="card">
-        <strong>${p.nombres} ${p.apellidos}</strong>
+        <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
         <div class="hint">
           ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
           ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
         </div>
         <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
+      </div>
+    `
+      )
+      .join("");
+  } catch (e) {
+    $app.innerHTML += `<div class="error">${e.message}</div>`;
+  }
+});
+
+// --- Fichas incompletas (sección 17 del handoff) ---
+Router.on("/personas/incompletas", async () => {
+  if (!requiereSesion()) return;
+  $app.innerHTML = `
+    <h1>Fichas incompletas</h1>
+    <p class="hint">Ordenadas de menos a más completas. Esto es solo información operativa — nunca una conclusión sobre la persona.</p>
+    <div id="lista-incompletas" class="hint">Cargando...</div>
+  `;
+  try {
+    const personas = await Api.fichasIncompletas();
+    const cont = document.getElementById("lista-incompletas");
+    if (!personas.length) {
+      cont.innerHTML = `<p class="hint">No hay fichas por debajo del umbral configurado.</p>`;
+      return;
+    }
+    cont.innerHTML = personas
+      .map(
+        (p) => `
+      <div class="card">
+        <strong>${p.nombre_completo}</strong>${badgeFicha(p)}
+        <div class="hint">${p.id_unico}</div>
+        <div class="hint">Faltan: ${p.datos_faltantes.join(", ")}</div>
       </div>
     `
       )

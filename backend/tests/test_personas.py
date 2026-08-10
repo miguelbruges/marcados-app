@@ -107,6 +107,37 @@ def test_editar_persona_inexistente_da_404(client, auth_headers):
     assert resp.status_code == 404
 
 
+def test_persona_creada_completa_incluye_pct_y_datos_faltantes(client, auth_headers):
+    resp = client.post(
+        "/personas",
+        json={"nombres": "Sofia", "apellidos": "Hernandez", "telefono": "3000000000"},
+        headers=auth_headers,
+    )
+    body = resp.json()
+    assert "ficha_completa_pct" in body
+    assert "Dirección" in body["datos_faltantes"]
+
+
+def test_fichas_incompletas_solo_lista_las_que_estan_bajo_el_umbral(client, auth_headers):
+    # Ficha vacía (solo nombres/apellidos) -> muy por debajo del umbral por defecto (70%).
+    client.post("/personas", json={"nombres": "Incompleta", "apellidos": "Uno"}, headers=auth_headers)
+
+    resp = client.get("/personas/fichas-incompletas", headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["nombre_completo"] == "Incompleta Uno"
+    assert body[0]["ficha_completa_pct"] < 70.0
+
+
+def test_fichas_incompletas_respeta_umbral_explicito_por_query(client, auth_headers):
+    client.post("/personas", json={"nombres": "Incompleta", "apellidos": "Uno"}, headers=auth_headers)
+
+    resp = client.get("/personas/fichas-incompletas", params={"umbral": 0}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 def test_editar_persona_registra_bitacora_solo_de_lo_que_cambio(client, auth_headers, db_session):
     from app.models import Bitacora
 

@@ -130,6 +130,20 @@ class Persona(Base):
     def nombre_completo(self) -> str:
         return f"{self.nombres} {self.apellidos}".strip()
 
+    @property
+    def ficha_completa_pct(self) -> float:
+        from app.services.ficha_completa import calcular_ficha_completa  # evita import circular
+
+        pct, _ = calcular_ficha_completa(self)
+        return pct
+
+    @property
+    def datos_faltantes(self) -> list[str]:
+        from app.services.ficha_completa import calcular_ficha_completa  # evita import circular
+
+        _, faltantes = calcular_ficha_completa(self)
+        return faltantes
+
 
 class PersonaArea(Base):
     """Varios-a-varios: una persona puede servir en más de un área a la vez."""
