@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # Sección 17 del handoff: el corte de "ficha incompleta" es configuración,
     # no una constante enterrada en el código.
     ficha_completa_umbral_porcentaje: float = 70.0
+    # Ruta local (en el servidor) al libro real usado como plantilla de
+    # export (sección 16.2). NUNCA vive en el repositorio: contiene datos
+    # personales de menores de edad. Si no está configurada, /export/excel
+    # responde 503 en vez de fallar de forma confusa.
+    excel_template_path: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -82,5 +82,16 @@ const Api = (() => {
     usuarios: () => request("/usuarios"),
     crearUsuario: (data) => request("/usuarios", { method: "POST", body: data }),
     desactivarUsuario: (id) => request(`/usuarios/${id}/desactivar`, { method: "PATCH" }),
+
+    async descargarExcel() {
+      const resp = await fetch(`${BASE_URL}/export/excel`, {
+        headers: { Authorization: `Bearer ${token()}` },
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || `Error ${resp.status}`);
+      }
+      return resp.blob();
+    },
   };
 })();

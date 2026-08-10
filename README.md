@@ -68,22 +68,51 @@ solo para desarrollo local.
 
 ## Migración desde el Excel
 
-`backend/migration/import_excel.py` es la plantilla de migración — **no se
-ha ejecutado contra el archivo real** porque el baseline actual no está
-disponible en este entorno de desarrollo. Antes de correrla:
+`backend/migration/migrar_datos_reales.py` implementa el contrato de la
+sección 15 de `MARCADOS_DATA_HANDOFF` (39 columnas de la hoja Jóvenes, más
+los 15 catálogos de la hoja Catálogos). Ya se corrió contra el Excel real
+hacia una base de prueba local — nunca hacia el despliegue de Render, cuyo
+disco es efímero (ver más abajo). Para repetirla contra otro archivo:
 
-1. Confirmar cuál es el Excel baseline vigente.
-2. `python -m migration.import_excel --excel /ruta/al/baseline.xlsx --dry-run`
-   y revisar el reporte (incluye posibles duplicados detectados, que nunca
-   se fusionan automáticamente).
-3. Recién entonces correr sin `--dry-run`.
+1. `python -m migration.migrar_datos_reales --excel /ruta/al/excel.xlsx --dry-run`
+   y revisar el reporte (IDs duplicados, sin nombre/apellido, sin Estado,
+   teléfonos compartidos — nada se fusiona automáticamente, todo queda
+   marcado para revisión humana en Seguimiento).
+2. Recién entonces correr sin `--dry-run`. Se niega a correr si la base ya
+   tiene personas — nunca sobrescribe en silencio.
+
+`backend/migration/import_excel.py` es una plantilla genérica anterior, sin
+usar; se mantiene solo como referencia histórica.
+
+## Ficha completa y fichas incompletas
+
+Cada persona expone `ficha_completa_pct` y `datos_faltantes`, calculados
+sobre los 14 campos clave de la sección 17 del handoff (nunca se guardan:
+se recalculan al vuelo). `GET /personas/fichas-incompletas` devuelve las
+fichas por debajo del umbral configurado (`FICHA_COMPLETA_UMBRAL_PORCENTAJE`,
+70% por defecto) — nunca bloquea el registro de nadie, es solo información
+operativa para priorizar seguimiento.
+
+## Exportar a Excel (plantilla real)
+
+`GET /export/excel` (solo admin) genera un `.xlsx` idéntico en diseño al
+libro real: usa el archivo real como plantilla (`openpyxl.load_workbook`,
+sin tocar fórmulas, catálogos ni formato), solo reemplaza las filas de datos
+de Jóvenes y Asistencia, y ajusta el rango de cada tabla al número real de
+filas. Requiere `EXCEL_TEMPLATE_PATH` apuntando a una copia del archivo real
+en el servidor (nunca en el repo — ver abajo). Seguimiento y Servicio
+todavía no se exportan: sus columnas no tienen un mapeo exacto ya poblado en
+el modelo actual, y no se quiso inventar uno.
 
 ## Seguridad y datos personales
 
-- El Excel y cualquier base de datos con información real **nunca** se suben
-  al repositorio — ver `.gitignore` (bloquea `*.xlsx`, `*.db`, `.env`, etc.).
+- El Excel, cualquier base de datos con información real, y la plantilla de
+  export **nunca** se suben al repositorio — ver `.gitignore` (bloquea
+  `*.xlsx`, `*.db`, `.env`, etc.). `EXCEL_TEMPLATE_PATH` apunta a un archivo
+  que vive solo en el servidor.
 - Autenticación JWT, contraseñas con bcrypt, CORS restringido por variable
-  de entorno, roles admin/líder.
+  de entorno, roles admin/líder/encargado/consolidación, bitácora de
+  cambios (quién, qué campo, valor anterior/nuevo, cuándo).
 - El semáforo espiritual y cualquier conclusión de seguimiento pastoral son
   siempre decisión humana — el sistema nunca las calcula automáticamente.
 

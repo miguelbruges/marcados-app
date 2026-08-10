@@ -205,6 +205,7 @@ class Asistencia(Base):
 
     persona: Mapped["Persona"] = relationship(back_populates="asistencias")
     evento: Mapped["Evento"] = relationship(back_populates="asistencias")
+    registrado_por: Mapped["Usuario | None"] = relationship(foreign_keys=[registrado_por_id])
 
 
 class Seguimiento(Base):

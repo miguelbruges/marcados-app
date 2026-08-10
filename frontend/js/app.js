@@ -63,8 +63,12 @@ Router.on("/login", () => {
 // --- Panel ---
 Router.on("/panel", async () => {
   if (!requiereSesion()) return;
-  const linkUsuarios = Api.rol() === "admin" ? `<p><a href="#/usuarios">+ Gestionar usuarios (líderes)</a></p>` : "";
-  $app.innerHTML = `<h1>Hola, ${Api.nombre()}</h1>${linkUsuarios}<div id="stats" class="stat-grid"></div>`;
+  const esAdmin = Api.rol() === "admin";
+  const linkUsuarios = esAdmin ? `<p><a href="#/usuarios">+ Gestionar usuarios (líderes)</a></p>` : "";
+  const linkExportar = esAdmin
+    ? `<p><a href="#" id="btn-exportar-excel">Descargar Excel (plantilla real)</a></p>`
+    : "";
+  $app.innerHTML = `<h1>Hola, ${Api.nombre()}</h1>${linkUsuarios}${linkExportar}<div id="stats" class="stat-grid"></div>`;
   try {
     const r = await Api.dashboardResumen();
     document.getElementById("stats").innerHTML = `
@@ -76,6 +80,28 @@ Router.on("/panel", async () => {
     `;
   } catch (e) {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
+  }
+
+  if (esAdmin) {
+    document.getElementById("btn-exportar-excel").addEventListener("click", async (e) => {
+      e.preventDefault();
+      const link = e.target;
+      const textoOriginal = link.textContent;
+      link.textContent = "Generando...";
+      try {
+        const blob = await Api.descargarExcel();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "MARCADOS_export.xlsx";
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(err.message || "No se pudo generar el Excel.");
+      } finally {
+        link.textContent = textoOriginal;
+      }
+    });
   }
 });
 
