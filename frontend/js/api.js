@@ -75,6 +75,7 @@ const Api = (() => {
     fichasIncompletas: () => request("/personas/fichas-incompletas"),
     historialSeguimiento: (personaId) => request(`/seguimiento/persona/${personaId}`),
     crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
+    catalogo: (tipo) => request(`/catalogos/${tipo}`),
 
     crearOReusarEvento: (data) => request("/eventos", { method: "POST", body: data }),
     listarEventos: () => request("/eventos"),

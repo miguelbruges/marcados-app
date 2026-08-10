@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_acceso_pastoral
 from app.matching import buscar_candidatos
 from app.models import Persona, Usuario
 from app.schemas import (
@@ -63,10 +63,11 @@ def obtener_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(ge
 
 
 @router.get("/{persona_id}/alertas", response_model=PersonaAlertasOut)
-def alertas_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def alertas_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(require_acceso_pastoral)):
     """Alertas operativas de una persona: semáforo de asistencia (sección
     15/21 del handoff) + inasistencias consecutivas + ficha incompleta.
-    Nunca es una conclusión pastoral — eso lo decide un humano."""
+    Nunca es una conclusión pastoral — eso lo decide un humano. Solo
+    admin/líder/encargado — no todo el equipo de consolidación."""
     persona = db.get(Persona, persona_id)
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")

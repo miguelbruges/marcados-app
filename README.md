@@ -127,6 +127,16 @@ el modelo actual, y no se quiso inventar uno.
   cambios (quién, qué campo, valor anterior/nuevo, cuándo).
 - El semáforo espiritual y cualquier conclusión de seguimiento pastoral son
   siempre decisión humana — el sistema nunca las calcula automáticamente.
+- **Acceso por rol** (definido con el usuario, 2026-08-10): la ficha general
+  de cada joven (datos de contacto, ficha completa) la ve cualquier usuario
+  con sesión — hoy eso es líderes y el equipo de consolidación, los únicos
+  con cuenta. El **seguimiento pastoral** y el **semáforo de asistencia**
+  (`GET /personas/{id}/alertas`, `GET /dashboard/alertas-resumen`,
+  `POST /seguimiento`, `GET /seguimiento/persona/{id}`) son solo para
+  `admin`, `lider` y `encargado` — hoy eso es Miguel, Nelson y Amy
+  (Encargada de Consolidación). El resto del equipo de consolidación
+  (Klareth, Sofía, Lucía, rol `consolidacion`) no accede a esas rutas
+  (403) y el frontend ni siquiera muestra esas secciones para ese rol.
 
 ## Desplegar para probar desde el celular (un solo servicio: Render)
 

@@ -133,3 +133,31 @@ def test_endpoint_dashboard_alertas_resumen(client, auth_headers, db_session):
     resp = client.get("/dashboard/alertas-resumen", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json() == {"verde": 0, "amarillo": 0, "rojo": 0, "sin_datos": 1}
+
+
+def _headers_consolidacion(client, db_session):
+    from app.models import RolUsuario, Usuario
+    from app.security import hash_password
+
+    usuario = Usuario(
+        nombre="Klareth", email="klareth2@marcadosapp.dev", password_hash=hash_password("x"), rol=RolUsuario.CONSOLIDACION
+    )
+    db_session.add(usuario)
+    db_session.commit()
+    resp = client.post("/auth/login", json={"email": "klareth2@marcadosapp.dev", "password": "x"})
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+def test_consolidacion_no_ve_alertas_de_una_persona(client, db_session):
+    persona = _crear_persona(db_session)
+    db_session.commit()
+    headers = _headers_consolidacion(client, db_session)
+
+    resp = client.get(f"/personas/{persona.id}/alertas", headers=headers)
+    assert resp.status_code == 403
+
+
+def test_consolidacion_no_ve_el_resumen_de_alertas(client, db_session):
+    headers = _headers_consolidacion(client, db_session)
+    resp = client.get("/dashboard/alertas-resumen", headers=headers)
+    assert resp.status_code == 403

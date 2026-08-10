@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_acceso_pastoral
 from app.models import Asistencia, Evento, Persona
 from app.services.alertas_asistencia import resumen_niveles
 
@@ -39,8 +39,9 @@ def resumen(db: Session = Depends(get_db), _=Depends(get_current_user)):
 
 
 @router.get("/alertas-resumen")
-def alertas_resumen(db: Session = Depends(get_db), _=Depends(get_current_user)):
+def alertas_resumen(db: Session = Depends(get_db), _=Depends(require_acceso_pastoral)):
     """Cuántas personas activas caen en cada nivel del semáforo OPERATIVO de
     asistencia (sección 15/21 del handoff). Alerta operativa, no espiritual
-    — el detalle por persona está en GET /personas/{id}/alertas."""
+    — el detalle por persona está en GET /personas/{id}/alertas. Solo
+    admin/líder/encargado, como el resto de lo pastoral."""
     return resumen_niveles(db)

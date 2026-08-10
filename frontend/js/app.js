@@ -2,6 +2,16 @@ const $app = document.getElementById("app");
 const $tabbar = document.getElementById("tabbar");
 const $btnSalir = document.getElementById("btn-salir");
 
+// Política de acceso (definida por el usuario, 2026-08-10): el seguimiento
+// pastoral y el semáforo de asistencia son solo para líderes y encargados
+// de área — no para todo el equipo de consolidación. El backend ya lo
+// exige (403 si no corresponde); acá solo evitamos mostrar una sección que
+// de todas formas fallaría, y evitamos el pedido HTTP que sabemos que va a
+// dar 403.
+function tieneAccesoPastoral() {
+  return ["admin", "lider", "encargado"].includes(Api.rol());
+}
+
 function requiereSesion() {
   if (!Api.isAuthenticated()) {
     Router.navegar("/login");
@@ -82,20 +92,22 @@ Router.on("/panel", async () => {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }
 
-  try {
-    const a = await Api.alertasResumen();
-    $app.innerHTML += `
-      <h2>Semáforo de asistencia (últimos 30 días)</h2>
-      <p class="hint">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona.</p>
-      <div class="stat-grid">
-        ${stat(a.verde, "Verde")}
-        ${stat(a.amarillo, "Amarillo")}
-        ${stat(a.rojo, "Rojo")}
-        ${stat(a.sin_datos, "Sin datos")}
-      </div>
-    `;
-  } catch (e) {
-    $app.innerHTML += `<div class="error">${e.message}</div>`;
+  if (tieneAccesoPastoral()) {
+    try {
+      const a = await Api.alertasResumen();
+      $app.innerHTML += `
+        <h2>Semáforo de asistencia (últimos 30 días)</h2>
+        <p class="hint">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona.</p>
+        <div class="stat-grid">
+          ${stat(a.verde, "Verde")}
+          ${stat(a.amarillo, "Amarillo")}
+          ${stat(a.rojo, "Rojo")}
+          ${stat(a.sin_datos, "Sin datos")}
+        </div>
+      `;
+    } catch (e) {
+      $app.innerHTML += `<div class="error">${e.message}</div>`;
+    }
   }
 
   if (esAdmin) {
@@ -180,21 +192,35 @@ Router.on("/personas", async () => {
 const CAMPOS_EDITABLES_FICHA = [
   ["nombres", "Nombres", "text"],
   ["apellidos", "Apellidos", "text"],
-  ["genero", "Género", "text"],
+  ["genero", "Género", "catalogo:genero"],
   ["fecha_nacimiento", "Fecha de nacimiento", "date"],
-  ["estado", "Estado", "text"],
+  ["estado", "Estado", "catalogo:estado"],
   ["telefono", "Teléfono", "text"],
   ["correo_electronico", "Correo electrónico", "text"],
   ["direccion", "Dirección", "text"],
   ["contacto_emergencia", "Contacto de emergencia", "text"],
-  ["parentesco", "Parentesco", "text"],
+  ["parentesco", "Parentesco", "catalogo:parentesco"],
   ["telefono_emergencia", "Teléfono de emergencia", "text"],
-  ["grupo_sanguineo", "Grupo sanguíneo", "text"],
-  ["eps", "EPS", "text"],
-  ["talla", "Talla", "text"],
+  ["grupo_sanguineo", "Grupo sanguíneo", "catalogo:grupo_sanguineo"],
+  ["eps", "EPS", "catalogo:eps"],
+  ["talla", "Talla", "catalogo:talla"],
+  ["estudio_biblico", "Estudio bíblico", "catalogo:formacion"],
   ["como_llego", "Cómo llegó", "text"],
   ["notas", "Notas", "text"],
 ];
+
+// Trae una sola vez cada catálogo que usan los desplegables de la ficha
+// (sección 15 del handoff: los catálogos reales del Excel alimentan los
+// desplegables, no listas escritas a mano).
+async function cargarCatalogosFicha() {
+  const tipos = [...new Set(
+    CAMPOS_EDITABLES_FICHA.filter(([, , tipo]) => tipo.startsWith("catalogo:")).map(([, , tipo]) => tipo.split(":")[1])
+  )];
+  const resultados = await Promise.all(tipos.map((t) => Api.catalogo(t).catch(() => [])));
+  const mapa = {};
+  tipos.forEach((t, i) => (mapa[t] = resultados[i]));
+  return mapa;
+}
 
 function nivelAsistenciaEtiqueta(nivel) {
   return { verde: "Verde", amarillo: "Amarillo", rojo: "Rojo", sin_datos: "Sin datos" }[nivel] || nivel;
@@ -209,34 +235,31 @@ Router.on("/personas/ver", async () => {
   }
   $app.innerHTML = `<p class="hint">Cargando ficha...</p>`;
   try {
-    const [persona, alertas, seguimientos] = await Promise.all([
+    const accesoPastoral = tieneAccesoPastoral();
+    const [persona, alertas, seguimientos, catalogos] = await Promise.all([
       Api.persona(id),
-      Api.alertasPersona(id),
-      Api.historialSeguimiento(id),
+      accesoPastoral ? Api.alertasPersona(id) : Promise.resolve(null),
+      accesoPastoral ? Api.historialSeguimiento(id) : Promise.resolve(null),
+      cargarCatalogosFicha(),
     ]);
-    renderFicha(persona, alertas, seguimientos);
+    renderFicha(persona, alertas, seguimientos, catalogos);
   } catch (e) {
     $app.innerHTML = `<div class="error">${e.message}</div>`;
   }
 });
 
-function renderFicha(persona, alertas, seguimientos) {
-  $app.innerHTML = `
-    <p><a href="#/personas">&larr; Volver a jóvenes</a></p>
-    <h1>${persona.nombres} ${persona.apellidos}</h1>
-    <p class="hint">${persona.id_unico}</p>
+function renderFicha(persona, alertas, seguimientos, catalogos) {
+  const seccionAlertas = alertas
+    ? `
     <div class="stat-grid">
       ${stat(persona.ficha_completa_pct + "%", "Ficha completa")}
       ${stat(nivelAsistenciaEtiqueta(alertas.nivel_asistencia), "Asistencia (30d)")}
       ${stat(alertas.inasistencias_consecutivas, "Inasistencias seguidas")}
-    </div>
-    ${persona.datos_faltantes.length ? `<p class="hint">Faltan: ${persona.datos_faltantes.join(", ")}</p>` : ""}
+    </div>`
+    : `<div class="stat-grid">${stat(persona.ficha_completa_pct + "%", "Ficha completa")}</div>`;
 
-    <h2>Datos</h2>
-    <form id="form-ficha"></form>
-    <button id="btn-editar-ficha" class="secundario">Editar</button>
-    <div class="error" id="ficha-error"></div>
-
+  const seccionSeguimiento = seguimientos
+    ? `
     <h2>Seguimiento pastoral</h2>
     <div id="lista-seguimiento"></div>
     <form id="form-seguimiento">
@@ -247,12 +270,37 @@ function renderFicha(persona, alertas, seguimientos) {
       <label><input type="checkbox" id="seg-requiere-atencion"> Requiere atención</label>
       <button class="primary" type="submit">Agregar registro</button>
       <div class="error" id="seguimiento-error"></div>
-    </form>
+    </form>`
+    : "";
+
+  $app.innerHTML = `
+    <p><a href="#/personas">&larr; Volver a jóvenes</a></p>
+    <h1>${persona.nombres} ${persona.apellidos}</h1>
+    <p class="hint">${persona.id_unico}</p>
+    ${seccionAlertas}
+    ${persona.datos_faltantes.length ? `<p class="hint">Faltan: ${persona.datos_faltantes.join(", ")}</p>` : ""}
+
+    <h2>Datos</h2>
+    <form id="form-ficha"></form>
+    <button id="btn-editar-ficha" class="secundario">Editar</button>
+    <div class="error" id="ficha-error"></div>
+
+    ${seccionSeguimiento}
   `;
 
   let editando = false;
   const $form = document.getElementById("form-ficha");
   const $btnEditar = document.getElementById("btn-editar-ficha");
+
+  function campoInput(campo, etiqueta, tipo, valor) {
+    if (tipo.startsWith("catalogo:")) {
+      const opciones = (catalogos[tipo.split(":")[1]] || [])
+        .map((c) => `<option value="${c.valor}" ${c.valor === valor ? "selected" : ""}>${c.valor}</option>`)
+        .join("");
+      return `<label>${etiqueta}</label><select data-campo="${campo}"><option value="">-- Seleccionar --</option>${opciones}</select>`;
+    }
+    return `<label>${etiqueta}</label><input type="${tipo}" data-campo="${campo}" value="${valor}">`;
+  }
 
   function pintarFicha() {
     $form.innerHTML = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
@@ -260,7 +308,7 @@ function renderFicha(persona, alertas, seguimientos) {
       if (!editando) {
         return `<div class="hint"><strong>${etiqueta}:</strong> ${valor || "—"}</div>`;
       }
-      return `<label>${etiqueta}</label><input type="${tipo}" data-campo="${campo}" value="${valor}">`;
+      return campoInput(campo, etiqueta, tipo, valor);
     }).join("");
     if (editando) {
       $form.innerHTML += `<button class="primary" type="submit">Guardar</button>`;
@@ -292,43 +340,45 @@ function renderFicha(persona, alertas, seguimientos) {
     }
   });
 
-  const $listaSeg = document.getElementById("lista-seguimiento");
-  function pintarSeguimientos(lista) {
-    if (!lista.length) {
-      $listaSeg.innerHTML = `<p class="hint">Todavía no hay registros de seguimiento.</p>`;
-      return;
+  if (seguimientos) {
+    const $listaSeg = document.getElementById("lista-seguimiento");
+    function pintarSeguimientos(lista) {
+      if (!lista.length) {
+        $listaSeg.innerHTML = `<p class="hint">Todavía no hay registros de seguimiento.</p>`;
+        return;
+      }
+      $listaSeg.innerHTML = lista
+        .map(
+          (s) => `
+        <div class="card">
+          <strong>${s.fecha}</strong>${s.tipo ? " · " + s.tipo : ""}${s.requiere_atencion ? ` <span class="badge BAJA">requiere atención</span>` : ""}
+          <div class="hint">${s.notas}</div>
+        </div>
+      `
+        )
+        .join("");
     }
-    $listaSeg.innerHTML = lista
-      .map(
-        (s) => `
-      <div class="card">
-        <strong>${s.fecha}</strong>${s.tipo ? " · " + s.tipo : ""}${s.requiere_atencion ? ` <span class="badge BAJA">requiere atención</span>` : ""}
-        <div class="hint">${s.notas}</div>
-      </div>
-    `
-      )
-      .join("");
-  }
-  pintarSeguimientos(seguimientos);
+    pintarSeguimientos(seguimientos);
 
-  document.getElementById("form-seguimiento").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const errorBox = document.getElementById("seguimiento-error");
-    errorBox.textContent = "";
-    try {
-      await Api.crearSeguimiento({
-        persona_id: persona.id,
-        tipo: document.getElementById("seg-tipo").value || null,
-        notas: document.getElementById("seg-notas").value,
-        requiere_atencion: document.getElementById("seg-requiere-atencion").checked,
-      });
-      const nuevos = await Api.historialSeguimiento(persona.id);
-      pintarSeguimientos(nuevos);
-      e.target.reset();
-    } catch (err) {
-      errorBox.textContent = err.message || "No se pudo guardar el seguimiento.";
-    }
-  });
+    document.getElementById("form-seguimiento").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const errorBox = document.getElementById("seguimiento-error");
+      errorBox.textContent = "";
+      try {
+        await Api.crearSeguimiento({
+          persona_id: persona.id,
+          tipo: document.getElementById("seg-tipo").value || null,
+          notas: document.getElementById("seg-notas").value,
+          requiere_atencion: document.getElementById("seg-requiere-atencion").checked,
+        });
+        const nuevos = await Api.historialSeguimiento(persona.id);
+        pintarSeguimientos(nuevos);
+        e.target.reset();
+      } catch (err) {
+        errorBox.textContent = err.message || "No se pudo guardar el seguimiento.";
+      }
+    });
+  }
 }
 
 // --- Fichas incompletas (sección 17 del handoff) ---
@@ -664,8 +714,10 @@ function renderFilaImportada(fila, idx) {
 }
 
 // --- Agregar joven ---
-Router.on("/personas/nueva", () => {
+Router.on("/personas/nueva", async () => {
   if (!requiereSesion()) return;
+  const generos = await Api.catalogo("genero").catch(() => []);
+  const opcionesGenero = generos.map((c) => `<option value="${c.valor}">${c.valor}</option>`).join("");
   $app.innerHTML = `
     <h1>Agregar joven</h1>
     <form id="form-persona">
@@ -680,8 +732,7 @@ Router.on("/personas/nueva", () => {
       <label>Género</label>
       <select name="genero">
         <option value="">-- Seleccionar --</option>
-        <option value="Masculino">Masculino</option>
-        <option value="Femenino">Femenino</option>
+        ${opcionesGenero}
       </select>
       <label>¿Bautizado?</label>
       <select name="bautizado">
