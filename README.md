@@ -142,11 +142,27 @@ comprobar que la app funciona desde un celular real, pero los datos pueden
 perderse si el servicio se reinicia por inactividad. No cargar datos reales
 de jóvenes ahí todavía — eso espera a la decisión de Postgres/Supabase.
 
-## Producción real (pendiente, requiere más decisiones del usuario)
+## Producción real (pendiente — bloqueado por la cuenta de Supabase)
 
-- Base de datos persistente: Postgres/Supabase (`DATABASE_URL` ya es
-  intercambiable, ver arriba).
-- Dominio propio y HTTPS (Render y GitHub Pages ya dan HTTPS por defecto en
-  sus subdominios).
-- Integración WhatsApp Business API (solo canal de entrada adicional, nunca
-  el núcleo del sistema).
+Todo el código ya está listo para Postgres (`psycopg2-binary` en
+`requirements.txt`, `DATABASE_URL` genérico en `app/database.py` y
+`alembic/env.py`, migraciones versionadas). Lo único que falta es la
+cuenta — eso lo tiene que crear el usuario, no se puede hacer desde acá.
+Cuando exista:
+
+1. Crear un proyecto en https://supabase.com y copiar el "Connection
+   string" (modo *Session pooler* o *Direct connection*, formato
+   `postgresql://postgres:[password]@...`).
+2. En Render (dashboard, no en `render.yaml` — la contraseña no va a git):
+   cambiar la variable `DATABASE_URL` del servicio `marcados-api` a esa
+   connection string.
+3. Redeploy. `alembic upgrade head` corre solo al arrancar (ver
+   `startCommand` en `render.yaml`) y crea el esquema completo en Postgres.
+4. Recién ahí correr la migración real de datos
+   (`migration/migrar_datos_reales.py`) apuntando `DATABASE_URL` a esa
+   misma base — hasta entonces, los 120 jóvenes reales solo existen en una
+   base de prueba local, nunca en Render (disco efímero, ver arriba).
+
+Pendiente también, sin bloqueo técnico: dominio propio (Render ya da HTTPS
+en su subdominio) y el bot de Telegram de solo consulta (sección 19 del
+handoff).

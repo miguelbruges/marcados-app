@@ -13,5 +13,12 @@ rapidfuzz==3.9.7
 openpyxl==3.1.5
 python-dotenv==1.0.1
 
+# Driver de Postgres — para cuando DATABASE_URL apunte a Supabase/Postgres
+# en vez de sqlite. No cambia nada del comportamiento actual (sqlite sigue
+# siendo el default en desarrollo y en render.yaml hasta que se decida
+# migrar). Con esta librería instalada, un DATABASE_URL "postgresql://..."
+# (el formato que da Supabase) funciona sin tocar código.
+psycopg2-binary==2.9.9
+
 pytest==8.3.3
 httpx==0.27.2
