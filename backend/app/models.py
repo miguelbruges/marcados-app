@@ -86,11 +86,14 @@ class Persona(Base):
 
     estudio_biblico: Mapped[str | None] = mapped_column(String(60), nullable=True)
 
+    tiene_instagram: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     instagram: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tiene_facebook: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     facebook: Mapped[str | None] = mapped_column(String(120), nullable=True)
     direccion: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     contacto_emergencia: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    parentesco: Mapped[str | None] = mapped_column(String(60), nullable=True)  # del contacto de emergencia
     telefono_emergencia: Mapped[str | None] = mapped_column(String(30), nullable=True)
     grupo_sanguineo: Mapped[str | None] = mapped_column(String(10), nullable=True)
     eps: Mapped[str | None] = mapped_column(String(120), nullable=True)

@@ -47,10 +47,13 @@ class PersonaBase(BaseModel):
     bautizado: bool = False
     fecha_bautismo: date | None = None
     estudio_biblico: str | None = None
+    tiene_instagram: bool | None = None
     instagram: str | None = None
+    tiene_facebook: bool | None = None
     facebook: str | None = None
     direccion: str | None = None
     contacto_emergencia: str | None = None
+    parentesco: str | None = None
     telefono_emergencia: str | None = None
     grupo_sanguineo: str | None = None
     eps: str | None = None
@@ -82,10 +85,13 @@ class PersonaUpdate(BaseModel):
     bautizado: bool | None = None
     fecha_bautismo: date | None = None
     estudio_biblico: str | None = None
+    tiene_instagram: bool | None = None
     instagram: str | None = None
+    tiene_facebook: bool | None = None
     facebook: str | None = None
     direccion: str | None = None
     contacto_emergencia: str | None = None
+    parentesco: str | None = None
     telefono_emergencia: str | None = None
     grupo_sanguineo: str | None = None
     eps: str | None = None
