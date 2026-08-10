@@ -109,8 +109,22 @@ button.primary {
 
 button.primary:disabled { opacity: 0.5; }
 
+button.secundario {
+  width: 100%;
+  padding: 0.7rem;
+  margin-top: 0.6rem;
+  background: white;
+  color: var(--verde);
+  border: 1px solid var(--verde);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .error { color: var(--baja); font-size: 0.9rem; margin-top: 0.6rem; }
 .hint { color: #777; font-size: 0.8rem; }
+
+.card-link { display: block; text-decoration: none; color: inherit; }
 
 .card {
   background: white;

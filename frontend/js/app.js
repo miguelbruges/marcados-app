@@ -158,6 +158,7 @@ Router.on("/personas", async () => {
     cont.innerHTML = personas
       .map(
         (p) => `
+      <a class="card-link" href="#/personas/ver?id=${p.id}">
       <div class="card">
         <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
         <div class="hint">
@@ -166,6 +167,7 @@ Router.on("/personas", async () => {
         </div>
         <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
       </div>
+      </a>
     `
       )
       .join("");
@@ -173,6 +175,161 @@ Router.on("/personas", async () => {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }
 });
+
+// --- Ficha individual: ver, editar, seguimiento ---
+const CAMPOS_EDITABLES_FICHA = [
+  ["nombres", "Nombres", "text"],
+  ["apellidos", "Apellidos", "text"],
+  ["genero", "Género", "text"],
+  ["fecha_nacimiento", "Fecha de nacimiento", "date"],
+  ["estado", "Estado", "text"],
+  ["telefono", "Teléfono", "text"],
+  ["correo_electronico", "Correo electrónico", "text"],
+  ["direccion", "Dirección", "text"],
+  ["contacto_emergencia", "Contacto de emergencia", "text"],
+  ["parentesco", "Parentesco", "text"],
+  ["telefono_emergencia", "Teléfono de emergencia", "text"],
+  ["grupo_sanguineo", "Grupo sanguíneo", "text"],
+  ["eps", "EPS", "text"],
+  ["talla", "Talla", "text"],
+  ["como_llego", "Cómo llegó", "text"],
+  ["notas", "Notas", "text"],
+];
+
+function nivelAsistenciaEtiqueta(nivel) {
+  return { verde: "Verde", amarillo: "Amarillo", rojo: "Rojo", sin_datos: "Sin datos" }[nivel] || nivel;
+}
+
+Router.on("/personas/ver", async () => {
+  if (!requiereSesion()) return;
+  const id = Router.query().get("id");
+  if (!id) {
+    Router.navegar("/personas");
+    return;
+  }
+  $app.innerHTML = `<p class="hint">Cargando ficha...</p>`;
+  try {
+    const [persona, alertas, seguimientos] = await Promise.all([
+      Api.persona(id),
+      Api.alertasPersona(id),
+      Api.historialSeguimiento(id),
+    ]);
+    renderFicha(persona, alertas, seguimientos);
+  } catch (e) {
+    $app.innerHTML = `<div class="error">${e.message}</div>`;
+  }
+});
+
+function renderFicha(persona, alertas, seguimientos) {
+  $app.innerHTML = `
+    <p><a href="#/personas">&larr; Volver a jóvenes</a></p>
+    <h1>${persona.nombres} ${persona.apellidos}</h1>
+    <p class="hint">${persona.id_unico}</p>
+    <div class="stat-grid">
+      ${stat(persona.ficha_completa_pct + "%", "Ficha completa")}
+      ${stat(nivelAsistenciaEtiqueta(alertas.nivel_asistencia), "Asistencia (30d)")}
+      ${stat(alertas.inasistencias_consecutivas, "Inasistencias seguidas")}
+    </div>
+    ${persona.datos_faltantes.length ? `<p class="hint">Faltan: ${persona.datos_faltantes.join(", ")}</p>` : ""}
+
+    <h2>Datos</h2>
+    <form id="form-ficha"></form>
+    <button id="btn-editar-ficha" class="secundario">Editar</button>
+    <div class="error" id="ficha-error"></div>
+
+    <h2>Seguimiento pastoral</h2>
+    <div id="lista-seguimiento"></div>
+    <form id="form-seguimiento">
+      <label>Tipo</label>
+      <input type="text" id="seg-tipo" placeholder="llamada, visita, mensaje...">
+      <label>Notas</label>
+      <textarea id="seg-notas" required></textarea>
+      <label><input type="checkbox" id="seg-requiere-atencion"> Requiere atención</label>
+      <button class="primary" type="submit">Agregar registro</button>
+      <div class="error" id="seguimiento-error"></div>
+    </form>
+  `;
+
+  let editando = false;
+  const $form = document.getElementById("form-ficha");
+  const $btnEditar = document.getElementById("btn-editar-ficha");
+
+  function pintarFicha() {
+    $form.innerHTML = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
+      const valor = persona[campo] ?? "";
+      if (!editando) {
+        return `<div class="hint"><strong>${etiqueta}:</strong> ${valor || "—"}</div>`;
+      }
+      return `<label>${etiqueta}</label><input type="${tipo}" data-campo="${campo}" value="${valor}">`;
+    }).join("");
+    if (editando) {
+      $form.innerHTML += `<button class="primary" type="submit">Guardar</button>`;
+    }
+    $btnEditar.hidden = editando;
+  }
+  pintarFicha();
+
+  $btnEditar.addEventListener("click", () => {
+    editando = true;
+    pintarFicha();
+  });
+
+  $form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById("ficha-error");
+    errorBox.textContent = "";
+    const cambios = {};
+    $form.querySelectorAll("[data-campo]").forEach((input) => {
+      cambios[input.dataset.campo] = input.value || null;
+    });
+    try {
+      const actualizada = await Api.editarPersona(persona.id, cambios);
+      Object.assign(persona, actualizada);
+      editando = false;
+      pintarFicha();
+    } catch (err) {
+      errorBox.textContent = err.message || "No se pudo guardar.";
+    }
+  });
+
+  const $listaSeg = document.getElementById("lista-seguimiento");
+  function pintarSeguimientos(lista) {
+    if (!lista.length) {
+      $listaSeg.innerHTML = `<p class="hint">Todavía no hay registros de seguimiento.</p>`;
+      return;
+    }
+    $listaSeg.innerHTML = lista
+      .map(
+        (s) => `
+      <div class="card">
+        <strong>${s.fecha}</strong>${s.tipo ? " · " + s.tipo : ""}${s.requiere_atencion ? ` <span class="badge BAJA">requiere atención</span>` : ""}
+        <div class="hint">${s.notas}</div>
+      </div>
+    `
+      )
+      .join("");
+  }
+  pintarSeguimientos(seguimientos);
+
+  document.getElementById("form-seguimiento").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errorBox = document.getElementById("seguimiento-error");
+    errorBox.textContent = "";
+    try {
+      await Api.crearSeguimiento({
+        persona_id: persona.id,
+        tipo: document.getElementById("seg-tipo").value || null,
+        notas: document.getElementById("seg-notas").value,
+        requiere_atencion: document.getElementById("seg-requiere-atencion").checked,
+      });
+      const nuevos = await Api.historialSeguimiento(persona.id);
+      pintarSeguimientos(nuevos);
+      e.target.reset();
+    } catch (err) {
+      errorBox.textContent = err.message || "No se pudo guardar el seguimiento.";
+    }
+  });
+}
 
 // --- Fichas incompletas (sección 17 del handoff) ---
 Router.on("/personas/incompletas", async () => {
@@ -192,11 +349,13 @@ Router.on("/personas/incompletas", async () => {
     cont.innerHTML = personas
       .map(
         (p) => `
+      <a class="card-link" href="#/personas/ver?id=${p.id}">
       <div class="card">
         <strong>${p.nombre_completo}</strong>${badgeFicha(p)}
         <div class="hint">${p.id_unico}</div>
         <div class="hint">Faltan: ${p.datos_faltantes.join(", ")}</div>
       </div>
+      </a>
     `
       )
       .join("");

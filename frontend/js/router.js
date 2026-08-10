@@ -6,7 +6,13 @@ const Router = (() => {
   }
 
   function actual() {
-    return location.hash.replace(/^#/, "") || "/login";
+    const hash = location.hash.replace(/^#/, "") || "/login";
+    return hash.split("?")[0]; // el query string no forma parte de la ruta
+  }
+
+  function query() {
+    const [, qs] = location.hash.split("?");
+    return new URLSearchParams(qs || "");
   }
 
   function resolver() {
@@ -21,5 +27,5 @@ const Router = (() => {
   window.addEventListener("hashchange", resolver);
   window.addEventListener("DOMContentLoaded", resolver);
 
-  return { on, resolver, navegar: (ruta) => (location.hash = `#${ruta}`) };
+  return { on, resolver, query, navegar: (ruta) => (location.hash = `#${ruta}`) };
 })();

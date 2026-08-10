@@ -66,11 +66,15 @@ const Api = (() => {
     alertasPersona: (personaId) => request(`/personas/${personaId}/alertas`),
 
     personas: () => request("/personas"),
+    persona: (id) => request(`/personas/${id}`),
+    editarPersona: (id, data) => request(`/personas/${id}`, { method: "PATCH", body: data }),
     crearPersona: (data) => request("/personas", { method: "POST", body: data }),
     buscarCoincidencias: (q) => request(`/personas/buscar/coincidencias?q=${encodeURIComponent(q)}`),
     marcarServidor: (personaId, fecha_inicio_servicio) =>
       request(`/personas/${personaId}/marcar-servidor`, { method: "POST", body: { fecha_inicio_servicio } }),
     fichasIncompletas: () => request("/personas/fichas-incompletas"),
+    historialSeguimiento: (personaId) => request(`/seguimiento/persona/${personaId}`),
+    crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
 
     crearOReusarEvento: (data) => request("/eventos", { method: "POST", body: data }),
     listarEventos: () => request("/eventos"),
