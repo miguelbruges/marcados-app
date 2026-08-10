@@ -101,5 +101,21 @@ const Api = (() => {
       }
       return resp.blob();
     },
+
+    async migrarExcel(archivo, confirmar) {
+      const formData = new FormData();
+      formData.append("archivo", archivo);
+      const resp = await fetch(`${BASE_URL}/migracion/excel?confirmar=${confirmar ? "true" : "false"}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token()}` },
+        body: formData,
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detalle = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+        throw new Error(detalle || `Error ${resp.status}`);
+      }
+      return data;
+    },
   };
 })();

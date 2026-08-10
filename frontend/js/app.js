@@ -76,7 +76,8 @@ Router.on("/panel", async () => {
   const esAdmin = Api.rol() === "admin";
   const linkUsuarios = esAdmin ? `<p><a href="#/usuarios">+ Gestionar usuarios (líderes)</a></p>` : "";
   const linkExportar = esAdmin
-    ? `<p><a href="#" id="btn-exportar-excel">Descargar Excel (plantilla real)</a></p>`
+    ? `<p><a href="#" id="btn-exportar-excel">Descargar Excel (plantilla real)</a></p>
+       <p><a href="#/admin/migracion">Cargar Excel real (carga inicial)</a></p>`
     : "";
   $app.innerHTML = `<h1>Hola, ${Api.nombre()}</h1>${linkUsuarios}${linkExportar}<div id="stats" class="stat-grid"></div>`;
   try {
@@ -136,6 +137,92 @@ Router.on("/panel", async () => {
 function stat(num, label) {
   return `<div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 }
+
+// --- Carga inicial: subir el Excel real (solo admin) ---
+Router.on("/admin/migracion", () => {
+  if (!requiereSesion()) return;
+  if (Api.rol() !== "admin") {
+    $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
+    return;
+  }
+  $app.innerHTML = `
+    <h1>Cargar Excel real</h1>
+    <p class="hint">Para la carga inicial de los jóvenes reales. Primero se muestra una vista previa (no guarda nada) — recién con "Confirmar" se escribe en la base. Se niega a correr si ya hay personas cargadas.</p>
+    <label>Archivo (.xlsx)</label>
+    <input type="file" id="migracion-archivo" accept=".xlsx,.xlsm">
+    <button class="primary" id="btn-vista-previa" type="button">Ver vista previa</button>
+    <div id="migracion-reporte"></div>
+    <button class="primary" id="btn-confirmar" type="button" hidden>Confirmar migración real</button>
+    <div class="error" id="migracion-error"></div>
+  `;
+
+  function archivoElegido() {
+    const input = document.getElementById("migracion-archivo");
+    return input.files && input.files[0];
+  }
+
+  function pintarReporte(reporte) {
+    const cont = document.getElementById("migracion-reporte");
+    const btnConfirmar = document.getElementById("btn-confirmar");
+    if (reporte.error) {
+      cont.innerHTML = `<div class="error">${reporte.error}</div>`;
+      btnConfirmar.hidden = true;
+      return;
+    }
+    const catalogos = Object.entries(reporte.catalogos || {})
+      .map(([tipo, n]) => `${tipo}: ${n}`)
+      .join(", ");
+    const sinApellido = (reporte.sin_apellido || []).map((f) => `${f.id_unico} ${f.nombres}`).join(", ") || "ninguno";
+    const sinEstado = (reporte.sin_estado || []).map((f) => `${f.id_unico} ${f.nombre_completo}`).join(", ") || "ninguno";
+    const compartidos = Object.entries(reporte.telefonos_compartidos || {})
+      .map(([tel, nombres]) => `${tel}: ${nombres.join(", ")}`)
+      .join("<br>") || "ninguno";
+    cont.innerHTML = `
+      <div class="card">
+        <div><strong>Personas leídas:</strong> ${reporte.total_leidas}</div>
+        <div><strong>Catálogos:</strong> ${catalogos}</div>
+        <div class="hint"><strong>Sin apellido (no bloquea):</strong> ${sinApellido}</div>
+        <div class="hint"><strong>Sin Estado (queda marcado para revisión):</strong> ${sinEstado}</div>
+        <div class="hint"><strong>Teléfonos compartidos (quedan marcados para revisión):</strong><br>${compartidos}</div>
+        ${reporte.resultado ? `<div><strong>${reporte.mensaje}</strong> Personas creadas: ${reporte.resultado.personas_creadas}, catálogos: ${reporte.resultado.catalogos_creados}, seguimientos de revisión: ${reporte.resultado.seguimientos_creados}.</div>` : `<div class="hint">${reporte.mensaje || ""}</div>`}
+      </div>
+    `;
+    btnConfirmar.hidden = !!reporte.resultado; // ya se confirmó, no mostrar el botón de nuevo
+  }
+
+  document.getElementById("btn-vista-previa").addEventListener("click", async () => {
+    const archivo = archivoElegido();
+    const errorBox = document.getElementById("migracion-error");
+    errorBox.textContent = "";
+    if (!archivo) {
+      errorBox.textContent = "Elegí un archivo primero.";
+      return;
+    }
+    try {
+      const reporte = await Api.migrarExcel(archivo, false);
+      pintarReporte(reporte);
+    } catch (e) {
+      errorBox.textContent = e.message || "No se pudo leer el archivo.";
+    }
+  });
+
+  document.getElementById("btn-confirmar").addEventListener("click", async () => {
+    const archivo = archivoElegido();
+    const errorBox = document.getElementById("migracion-error");
+    errorBox.textContent = "";
+    if (!archivo) {
+      errorBox.textContent = "Elegí un archivo primero.";
+      return;
+    }
+    if (!confirm("¿Seguro? Esto escribe los jóvenes reales en la base de datos en vivo. No se puede deshacer desde acá.")) return;
+    try {
+      const reporte = await Api.migrarExcel(archivo, true);
+      pintarReporte(reporte);
+    } catch (e) {
+      errorBox.textContent = e.message || "No se pudo migrar.";
+    }
+  });
+});
 
 // --- Ficha completa: badge de completitud (sección 17 del handoff) ---
 function nivelFicha(pct) {

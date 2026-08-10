@@ -84,6 +84,20 @@ disco es efímero (ver más abajo). Para repetirla contra otro archivo:
 `backend/migration/import_excel.py` es una plantilla genérica anterior, sin
 usar; se mantiene solo como referencia histórica.
 
+## Cargar el Excel real en producción (sin acceso directo a la base)
+
+`POST /migracion/excel` (solo admin, multipart) sube el Excel real y corre
+la misma migración del script de línea de comandos, directo contra la base
+en vivo — pensado para cuando no hay forma de conectarse directo a la base
+de datos de producción (p.ej. Supabase) desde fuera. Flujo: `confirmar=false`
+(o sin el parámetro) es una vista previa que no escribe nada; `confirmar=true`
+escribe de verdad, y aun así se niega con 409 si la base ya tiene personas —
+nunca sobrescribe en silencio. La lógica de negocio (mapeo de columnas,
+validaciones, reglas de "no inventar datos") vive en un solo lugar,
+`app/services/migracion_excel.py`, compartida con `migration/migrar_datos_reales.py`
+(el script de CLI, para desarrollo local) — nunca hay dos copias que puedan
+desincronizarse. Pantalla en el panel (solo admin): "Cargar Excel real".
+
 ## Ficha completa y fichas incompletas
 
 Cada persona expone `ficha_completa_pct` y `datos_faltantes`, calculados
