@@ -71,12 +71,80 @@ def calcular_inasistencias_consecutivas(db: Session, persona_id: int) -> int:
     return consecutivas
 
 
-def resumen_niveles(db: Session) -> dict[str, int]:
+def calcular_niveles_todas(
+    db: Session,
+    ventana_dias: int | None = None,
+    umbral_verde: float | None = None,
+    umbral_amarillo: float | None = None,
+) -> dict[int, SemaforoAsistencia]:
+    """Semáforo de TODAS las personas activas en una sola consulta — evitar
+    correr calcular_semaforo() persona por persona (N+1) importa de verdad
+    acá: con la base en Supabase, cada consulta es un viaje de red, y
+    120 viajes hacían que el panel tardara notoriamente en cargar."""
+    ventana_dias = settings.alertas_ventana_dias if ventana_dias is None else ventana_dias
+    umbral_verde = settings.alertas_umbral_verde if umbral_verde is None else umbral_verde
+    umbral_amarillo = settings.alertas_umbral_amarillo if umbral_amarillo is None else umbral_amarillo
+    desde = date.today() - timedelta(days=ventana_dias)
+
+    ids_activos = db.scalars(select(Persona.id).where(Persona.activo == True)).all()  # noqa: E712
+    filas = db.execute(
+        select(Asistencia.persona_id, Asistencia.presente)
+        .join(Evento, Evento.id == Asistencia.evento_id)
+        .where(Evento.fecha >= desde, Asistencia.persona_id.in_(ids_activos))
+    ).all()
+
+    contadores: dict[int, list[int]] = {}
+    for persona_id, presente in filas:
+        c = contadores.setdefault(persona_id, [0, 0])
+        c[0] += 1
+        if presente:
+            c[1] += 1
+
+    resultado: dict[int, SemaforoAsistencia] = {}
+    for persona_id in ids_activos:
+        evaluables, asistidas = contadores.get(persona_id, [0, 0])
+        if evaluables == 0:
+            resultado[persona_id] = SemaforoAsistencia(asistidas, evaluables, None, "sin_datos")
+            continue
+        fraccion = asistidas / evaluables
+        if fraccion >= umbral_verde:
+            nivel = "verde"
+        elif fraccion >= umbral_amarillo:
+            nivel = "amarillo"
+        else:
+            nivel = "rojo"
+        resultado[persona_id] = SemaforoAsistencia(asistidas, evaluables, round(fraccion * 100, 1), nivel)
+    return resultado
+
+
+def resumen_niveles(
+    db: Session,
+    ventana_dias: int | None = None,
+    umbral_verde: float | None = None,
+    umbral_amarillo: float | None = None,
+) -> dict[str, int]:
     """Cuenta cuántas personas activas caen en cada nivel del semáforo de
     asistencia — para el panel y, más adelante, el bot de Telegram de solo
     consulta (sección 19: '¿cuántos jóvenes en rojo?')."""
     conteo = {"verde": 0, "amarillo": 0, "rojo": 0, "sin_datos": 0}
-    personas = db.scalars(select(Persona.id).where(Persona.activo == True)).all()  # noqa: E712
-    for persona_id in personas:
-        conteo[calcular_semaforo(db, persona_id).nivel] += 1
+    for s in calcular_niveles_todas(db, ventana_dias, umbral_verde, umbral_amarillo).values():
+        conteo[s.nivel] += 1
     return conteo
+
+
+def personas_por_nivel(
+    db: Session,
+    nivel: str,
+    ventana_dias: int | None = None,
+    umbral_verde: float | None = None,
+    umbral_amarillo: float | None = None,
+) -> list[Persona]:
+    """Lista de personas detrás de una pastilla del semáforo — para poder
+    abrirla y ver quiénes son, no solo cuántos."""
+    niveles = calcular_niveles_todas(db, ventana_dias, umbral_verde, umbral_amarillo)
+    ids = [pid for pid, s in niveles.items() if s.nivel == nivel]
+    if not ids:
+        return []
+    return db.scalars(
+        select(Persona).where(Persona.id.in_(ids)).order_by(Persona.apellidos, Persona.nombres)
+    ).all()

@@ -63,7 +63,9 @@ const Api = (() => {
 
     dashboardResumen: () => request("/dashboard/resumen"),
     asistieron30Dias: () => request("/dashboard/asistieron-30-dias"),
-    alertasResumen: () => request("/dashboard/alertas-resumen"),
+    alertasResumen: (ventanaDias) => request(`/dashboard/alertas-resumen${ventanaDias ? "?ventana_dias=" + ventanaDias : ""}`),
+    alertasDetalle: (nivel, ventanaDias) =>
+      request(`/dashboard/alertas-detalle?nivel=${nivel}${ventanaDias ? "&ventana_dias=" + ventanaDias : ""}`),
     alertasPersona: (personaId) => request(`/personas/${personaId}/alertas`),
 
     personas: (activo) => request(`/personas${activo === undefined ? "" : "?activo=" + activo}`),
@@ -79,6 +81,7 @@ const Api = (() => {
     crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
     catalogo: (tipo) => request(`/catalogos/${tipo}`),
 
+    actividades: () => request("/actividades"),
     crearOReusarEvento: (data) => request("/eventos", { method: "POST", body: data }),
     listarEventos: () => request("/eventos"),
     registrarAsistencia: (data) => request("/asistencia", { method: "POST", body: data }),

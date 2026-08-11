@@ -201,6 +201,24 @@ button.secundario {
 
 .card-link { display: block; text-decoration: none; color: inherit; }
 
+/* --- Botón de atrás: mismo componente en toda subpágina --- */
+.boton-atras {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  margin: 0 0 0.9rem;
+  padding: 0.15rem 0;
+  color: var(--morado-600);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.boton-atras svg { width: 1rem; height: 1rem; flex: none; }
+.boton-atras:hover { color: var(--acento-2); }
+
 .card {
   background: var(--superficie);
   border: 1px solid var(--borde);
@@ -297,8 +315,35 @@ button.secundario {
 /* --- Semáforo de asistencia --- */
 .semaforo { margin-top: 1.6rem; }
 .semaforo .aclaracion { font-size: 0.78rem; color: var(--texto-suave); margin: 0.15rem 0 1rem; line-height: 1.4; }
+
+.periodo-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+.chip-periodo {
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto-suave);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chip-periodo.activo { background: var(--morado-600); border-color: var(--morado-600); color: white; }
+
 .pastillas { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
-.pastilla { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.8rem; border-radius: 14px; font-weight: 700; }
+.pastilla {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.pastilla[aria-expanded="true"] { border-color: currentColor; }
 .pastilla .pastilla-punto { width: 0.6rem; height: 0.6rem; border-radius: 50%; flex: none; }
 .pastilla .pastilla-n { font-family: var(--display); font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 .pastilla .pastilla-t { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.85; display: block; }
@@ -310,6 +355,11 @@ button.secundario {
 .pastilla.rojo .pastilla-punto { background: var(--rojo); }
 .pastilla.gris { background: var(--gris-fondo); color: var(--gris); }
 .pastilla.gris .pastilla-punto { background: var(--gris); }
+
+#semaforo-detalle .kpi-lista { margin-top: 0.9rem; padding: 0; border-top: 1px dashed var(--borde); }
+#semaforo-detalle .kpi-lista li { padding: 0.5rem 0; }
+#semaforo-detalle .kpi-lista a { color: var(--texto); text-decoration: none; font-weight: 600; }
+#semaforo-detalle .kpi-lista a:hover { color: var(--morado-600); }
 
 /* --- Administración (solo admin) --- */
 .admin-sub { color: var(--texto-suave); font-size: 0.88rem; margin: -0.6rem 0 1.3rem; }

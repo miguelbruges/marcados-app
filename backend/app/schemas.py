@@ -178,6 +178,26 @@ class MatchResponse(BaseModel):
     candidatos: list[MatchCandidatoOut]
 
 
+# --- Actividades ---
+class ActividadOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nombre: str
+    tipo: str | None = None
+    activo: bool
+
+
+class ActividadCreate(BaseModel):
+    nombre: str
+    tipo: str | None = None
+
+
+class ActividadUpdate(BaseModel):
+    nombre: str | None = None
+    tipo: str | None = None
+    activo: bool | None = None
+
+
 # --- Eventos / Asistencia ---
 class EventoCreate(BaseModel):
     actividad_id: int
@@ -195,6 +215,7 @@ class ImportarPreviewRequest(BaseModel):
     actividad_id: int
     fecha: date
     texto: str
+    nombre_evento: str | None = None  # para "Otro": nombre libre en vez de la fecha sola
 
 
 class ImportarFilaOut(BaseModel):
@@ -228,6 +249,7 @@ class AsistenciaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     persona_id: int
+    persona_nombre: str
     evento_id: int
     presente: bool
     registrado_en: datetime

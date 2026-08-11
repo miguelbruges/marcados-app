@@ -218,6 +218,10 @@ class Asistencia(Base):
     evento: Mapped["Evento"] = relationship(back_populates="asistencias")
     registrado_por: Mapped["Usuario | None"] = relationship(foreign_keys=[registrado_por_id])
 
+    @property
+    def persona_nombre(self) -> str:
+        return self.persona.nombre_completo
+
 
 class Seguimiento(Base):
     """Registro de seguimiento pastoral. Es un log humano, no una conclusión automática."""

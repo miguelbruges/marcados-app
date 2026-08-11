@@ -6,10 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.matching import buscar_candidatos
 from app.models import Actividad, Asistencia, Evento, Persona, Usuario
 from app.schemas import (
+    ActividadCreate,
+    ActividadOut,
+    ActividadUpdate,
     AsistenciaCreate,
     AsistenciaOut,
     EventoCreate,
@@ -23,6 +26,48 @@ from app.schemas import (
 from app.services.importador import parsear_lista
 
 router = APIRouter(tags=["asistencia"])
+
+
+@router.get("/actividades", response_model=list[ActividadOut])
+def listar_actividades(
+    activo: bool | None = Query(default=True),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Alimenta los desplegables de 'Actividad' en Asistencia/Importar —
+    antes esa lista estaba escrita a mano en el frontend ('Culto Juvenil'),
+    sin relación con las actividades reales de la base de datos."""
+    q = select(Actividad)
+    if activo is not None:
+        q = q.where(Actividad.activo == activo)
+    return db.scalars(q.order_by(Actividad.nombre)).all()
+
+
+@router.post("/actividades", response_model=ActividadOut, status_code=201)
+def crear_actividad(data: ActividadCreate, db: Session = Depends(get_db), _admin: Usuario = Depends(require_admin)):
+    if db.query(Actividad).filter(Actividad.nombre == data.nombre).first():
+        raise HTTPException(status_code=409, detail="Ya existe una actividad con ese nombre")
+    actividad = Actividad(nombre=data.nombre, tipo=data.tipo)
+    db.add(actividad)
+    db.commit()
+    db.refresh(actividad)
+    return actividad
+
+
+@router.patch("/actividades/{actividad_id}", response_model=ActividadOut)
+def editar_actividad(
+    actividad_id: int, data: ActividadUpdate, db: Session = Depends(get_db), _admin: Usuario = Depends(require_admin)
+):
+    """Admin-only: renombrar o desactivar una actividad (nunca se borra —
+    quedaría huérfano el historial de eventos/asistencia que la usan)."""
+    actividad = db.get(Actividad, actividad_id)
+    if not actividad:
+        raise HTTPException(status_code=404, detail="Actividad no encontrada")
+    for campo, valor in data.model_dump(exclude_unset=True).items():
+        setattr(actividad, campo, valor)
+    db.commit()
+    db.refresh(actividad)
+    return actividad
 
 
 def _obtener_o_crear_evento(db: Session, actividad_id: int, fecha: date, nombre: str) -> Evento:
@@ -130,7 +175,7 @@ def importar_preview(
     uno. NO guarda nada — es solo la vista previa que el líder confirma antes
     de guardar. El evento sí se crea/reutiliza aquí porque es idempotente y
     hace falta su id para el paso de confirmación."""
-    evento = _obtener_o_crear_evento(db, data.actividad_id, data.fecha, f"{data.fecha}")
+    evento = _obtener_o_crear_evento(db, data.actividad_id, data.fecha, data.nombre_evento or f"{data.fecha}")
 
     personas = db.execute(
         select(Persona.id, Persona.id_unico, Persona.nombres, Persona.apellidos).where(Persona.activo == True)  # noqa: E712

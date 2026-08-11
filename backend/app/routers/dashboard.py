@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_acceso_pastoral
 from app.models import Asistencia, Evento, Persona
 from app.schemas import PersonaResumen
-from app.services.alertas_asistencia import resumen_niveles
+from app.services.alertas_asistencia import personas_por_nivel, resumen_niveles
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -56,9 +56,27 @@ def asistieron_30_dias(db: Session = Depends(get_db), _=Depends(get_current_user
 
 
 @router.get("/alertas-resumen")
-def alertas_resumen(db: Session = Depends(get_db), _=Depends(require_acceso_pastoral)):
+def alertas_resumen(
+    ventana_dias: int | None = Query(default=None, ge=1, le=365, description="Por defecto, el de configuración (30)"),
+    db: Session = Depends(get_db),
+    _=Depends(require_acceso_pastoral),
+):
     """Cuántas personas activas caen en cada nivel del semáforo OPERATIVO de
     asistencia (sección 15/21 del handoff). Alerta operativa, no espiritual
     — el detalle por persona está en GET /personas/{id}/alertas. Solo
-    admin/líder/encargado, como el resto de lo pastoral."""
-    return resumen_niveles(db)
+    admin/líder/encargado, como el resto de lo pastoral. El período es
+    configurable por pedido del usuario — no tiene por qué ser siempre 30
+    días."""
+    return resumen_niveles(db, ventana_dias=ventana_dias)
+
+
+@router.get("/alertas-detalle", response_model=list[PersonaResumen])
+def alertas_detalle(
+    nivel: str = Query(..., pattern="^(verde|amarillo|rojo|sin_datos)$"),
+    ventana_dias: int | None = Query(default=None, ge=1, le=365),
+    db: Session = Depends(get_db),
+    _=Depends(require_acceso_pastoral),
+):
+    """Lista de personas detrás de una pastilla del semáforo — para poder
+    tocarla y ver quiénes son, no solo cuántos."""
+    return personas_por_nivel(db, nivel, ventana_dias=ventana_dias)

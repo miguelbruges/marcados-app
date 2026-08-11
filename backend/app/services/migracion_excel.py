@@ -47,11 +47,12 @@ from app.models import Actividad, Catalogo, Persona, Seguimiento
 
 # Catálogo de actividades — fuente: Catálogos!B (columna ACTIVIDAD).
 ACTIVIDADES = [
-    "Sábado - Encuentro Marcados",
-    "Domingo - Escuela Dominical",
-    "Martes - Escuela de Servidores",
+    "Encuentro Marcados",
+    "1er Escuela Dominical",
+    "2da Escuela Dominical",
+    "Escuela de Servidores",
     "Reunión general líderes y servidores",
-    "Otro / Evento esporádico",
+    "Otro",
 ]
 
 # Columnas de captura de la hoja 'Jóvenes' (1-indexadas). Las derivadas

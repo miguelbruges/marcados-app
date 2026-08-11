@@ -4,6 +4,7 @@ from app.models import Actividad, Asistencia, Evento, Persona
 from app.services.alertas_asistencia import (
     calcular_inasistencias_consecutivas,
     calcular_semaforo,
+    personas_por_nivel,
     resumen_niveles,
 )
 
@@ -133,6 +134,64 @@ def test_endpoint_dashboard_alertas_resumen(client, auth_headers, db_session):
     resp = client.get("/dashboard/alertas-resumen", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json() == {"verde": 0, "amarillo": 0, "rojo": 0, "sin_datos": 1}
+
+
+def test_personas_por_nivel_devuelve_a_quien_corresponde(db_session):
+    actividad = _actividad(db_session)
+    verde = _crear_persona(db_session, "MAR-000001")
+    rojo = _crear_persona(db_session, "MAR-000002")
+    db_session.flush()
+
+    for dias, (persona, presente) in enumerate([(verde, True), (rojo, False)], start=1):
+        evento = _crear_evento(db_session, dias, actividad)
+        db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=presente))
+    db_session.commit()
+
+    verdes = personas_por_nivel(db_session, "verde")
+    assert [p.id_unico for p in verdes] == ["MAR-000001"]
+
+    sin_datos = personas_por_nivel(db_session, "sin_datos")
+    assert sin_datos == []  # nadie más existe sin registros
+
+
+def test_resumen_niveles_respeta_ventana_configurable(db_session):
+    persona = _crear_persona(db_session)
+    actividad = _actividad(db_session)
+    evento = _crear_evento(db_session, 45, actividad)  # fuera de los 30 dias por defecto
+    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
+    db_session.commit()
+
+    # con la ventana por defecto (30 dias) no se ve
+    assert resumen_niveles(db_session)["sin_datos"] == 1
+    # con una ventana mas amplia, si
+    resumen_60 = resumen_niveles(db_session, ventana_dias=60)
+    assert resumen_60["verde"] == 1
+    assert resumen_60["sin_datos"] == 0
+
+
+def test_endpoint_dashboard_alertas_detalle(client, auth_headers, db_session):
+    actividad = _actividad(db_session)
+    verde = _crear_persona(db_session, "MAR-000001")
+    db_session.flush()
+    evento = _crear_evento(db_session, 1, actividad)
+    db_session.add(Asistencia(persona_id=verde.id, evento_id=evento.id, presente=True))
+    db_session.commit()
+
+    resp = client.get("/dashboard/alertas-detalle", params={"nivel": "verde"}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()[0]["id_unico"] == "MAR-000001"
+
+
+def test_endpoint_dashboard_alertas_resumen_con_ventana_explicita(client, auth_headers, db_session):
+    persona = _crear_persona(db_session)
+    actividad = _actividad(db_session)
+    evento = _crear_evento(db_session, 45, actividad)
+    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
+    db_session.commit()
+
+    resp = client.get("/dashboard/alertas-resumen", params={"ventana_dias": 60}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["verde"] == 1
 
 
 def _headers_consolidacion(client, db_session):

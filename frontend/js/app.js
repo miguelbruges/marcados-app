@@ -99,43 +99,91 @@ Router.on("/panel", async () => {
     const inactivos = inactivosCrudo.map(conNombreCompleto);
     const todas = activos.concat(inactivos);
     pintarKpis([
-      { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo") },
-      { label: "Activos", valor: resumen.activos, personas: activos, etiqueta: () => "activo" },
-      { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado" },
-      { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor" },
-      { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días." },
+      { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo"), filtro: null },
+      { label: "Activos", valor: resumen.activos, personas: activos, etiqueta: () => "activo", filtro: "activos" },
+      { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados" },
+      { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores" },
+      { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
     ]);
   } catch (e) {
     document.getElementById("grid-kpi").innerHTML = `<div class="error">${e.message}</div>`;
   }
 
   if (tieneAccesoPastoral()) {
-    try {
-      const a = await Api.alertasResumen();
-      document.getElementById("semaforo-slot").innerHTML = `
-        <div class="card semaforo">
-          <h2 style="margin-top:0">Semáforo de asistencia · 30 días</h2>
-          <p class="aclaracion">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona.</p>
-          <div class="pastillas">
-            ${pastilla("verde", a.verde, "Verde")}
-            ${pastilla("amarillo", a.amarillo, "Amarillo")}
-            ${pastilla("rojo", a.rojo, "Rojo")}
-            ${pastilla("gris", a.sin_datos, "Sin datos")}
-          </div>
-        </div>
-      `;
-    } catch (e) {
-      document.getElementById("semaforo-slot").innerHTML = `<div class="error">${e.message}</div>`;
-    }
+    await cargarSemaforo(30);
   }
 });
 
-function pastilla(clase, n, etiqueta) {
+// --- Semáforo de asistencia: período configurable + pastillas que se abren
+// para mostrar quiénes están detrás del número (pedido del usuario, 2026-08-11) ---
+const PERIODOS_SEMAFORO = [7, 15, 30, 60, 90];
+let semaforoNivelAbierto = null;
+
+async function cargarSemaforo(ventanaDias) {
+  const slot = document.getElementById("semaforo-slot");
+  if (!slot) return;
+  semaforoNivelAbierto = null;
+  slot.innerHTML = `<p class="hint">Cargando semáforo...</p>`;
+  try {
+    const a = await Api.alertasResumen(ventanaDias);
+    slot.innerHTML = `
+      <div class="card semaforo">
+        <h2 style="margin-top:0">Semáforo de asistencia</h2>
+        <p class="aclaracion">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona. Tocá un color para ver quiénes son.</p>
+        <div class="periodo-chips">
+          ${PERIODOS_SEMAFORO.map(
+            (d) => `<button type="button" class="chip-periodo ${d === ventanaDias ? "activo" : ""}" data-dias="${d}">${d} días</button>`
+          ).join("")}
+        </div>
+        <div class="pastillas">
+          ${pastilla("verde", a.verde, "Verde", "verde")}
+          ${pastilla("amarillo", a.amarillo, "Amarillo", "amarillo")}
+          ${pastilla("rojo", a.rojo, "Rojo", "rojo")}
+          ${pastilla("gris", a.sin_datos, "Sin datos", "sin_datos")}
+        </div>
+        <div id="semaforo-detalle"></div>
+      </div>
+    `;
+    slot.querySelectorAll(".chip-periodo").forEach((btn) => {
+      btn.addEventListener("click", () => cargarSemaforo(Number(btn.dataset.dias)));
+    });
+    slot.querySelectorAll("button.pastilla").forEach((btn) => {
+      btn.addEventListener("click", () => alternarDetalleSemaforo(btn, ventanaDias));
+    });
+  } catch (e) {
+    slot.innerHTML = `<div class="error">${e.message}</div>`;
+  }
+}
+
+async function alternarDetalleSemaforo(btn, ventanaDias) {
+  const nivel = btn.dataset.nivel;
+  const detalle = document.getElementById("semaforo-detalle");
+  const slot = document.getElementById("semaforo-slot");
+  if (semaforoNivelAbierto === nivel) {
+    semaforoNivelAbierto = null;
+    detalle.innerHTML = "";
+    slot.querySelectorAll("button.pastilla").forEach((b) => b.setAttribute("aria-expanded", "false"));
+    return;
+  }
+  semaforoNivelAbierto = nivel;
+  slot.querySelectorAll("button.pastilla").forEach((b) => b.setAttribute("aria-expanded", String(b === btn)));
+  detalle.innerHTML = `<p class="hint">Cargando...</p>`;
+  try {
+    const personas = await Api.alertasDetalle(nivel, ventanaDias);
+    detalle.innerHTML = personas.length
+      ? `<ul class="kpi-lista">${personas.map((p) => `<li><a href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a></li>`).join("")}</ul>`
+      : `<p class="hint">Nadie en este nivel por ahora.</p>`;
+  } catch (e) {
+    detalle.innerHTML = `<div class="error">${e.message}</div>`;
+  }
+}
+
+function pastilla(clase, n, etiqueta, nivel) {
   return `
-    <div class="pastilla ${clase}">
+    <button type="button" class="pastilla ${clase}" data-nivel="${nivel}" aria-expanded="false">
       <span class="pastilla-punto"></span>
       <div><span class="pastilla-n">${n}</span><span class="pastilla-t">${etiqueta}</span></div>
-    </div>
+    </button>
   `;
 }
 
@@ -150,11 +198,12 @@ function pintarKpis(items) {
     art.className = "kpi";
     art.dataset.abierto = "false";
     const idDet = `kpi-detalle-${idx}`;
+    const hrefVerTodos = item.filtro ? `#/personas?filtro=${item.filtro}` : "#/personas";
     const contenidoLista = nombres.length
       ? `<ul class="kpi-lista">${nombres
           .map((p) => `<li>${p.nombre_completo}<span class="badge ALTA">${item.etiqueta(p)}</span></li>`)
           .join("")}</ul>
-         ${item.personas.length > nombres.length ? `<a class="kpi-vertodos" href="#/personas">Ver los ${item.personas.length} completos →</a>` : ""}`
+         ${item.personas.length > nombres.length ? `<a class="kpi-vertodos" href="${hrefVerTodos}">Ver los ${item.personas.length} completos →</a>` : ""}`
       : `<p class="kpi-vacio">${item.vacioTexto || "Nadie en esta categoría todavía."}</p>`;
     art.innerHTML = `
       <button class="kpi-cabecera" type="button" aria-expanded="false" aria-controls="${idDet}">
@@ -179,6 +228,17 @@ function stat(num, label) {
   return `<div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 }
 
+// --- Botón de atrás: mismo componente en todas las subpáginas (pedido del
+// usuario, 2026-08-11) — antes cada página tenía su propio enlace suelto. ---
+function botonAtras(destino, texto) {
+  return `
+    <a class="boton-atras" href="#${destino}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      ${texto}
+    </a>
+  `;
+}
+
 // --- Administración (solo admin) ---
 $btnAdminGear.addEventListener("click", () => Router.navegar("/admin"));
 
@@ -189,7 +249,7 @@ Router.on("/admin", () => {
     return;
   }
   $app.innerHTML = `
-    <p><a href="#/panel">&larr; Volver al panel</a></p>
+    ${botonAtras("/panel", "Panel")}
     <h1>Administración</h1>
     <p class="admin-sub">Acciones que solo ve el administrador — no aparecen para líderes ni consolidación.</p>
     <div class="lista-admin">
@@ -205,7 +265,7 @@ Router.on("/admin", () => {
       </a>
       <a class="fila-admin" href="#/admin/migracion">
         <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <span class="fila-admin-texto"><strong>Cargar Excel real</strong><small>Carga inicial — se niega si ya hay personas</small></span>
+        <span class="fila-admin-texto"><strong>Cargar datos iniciales del Excel</strong><small>Solo la primera vez — sube el Excel real para poblar la app. Se niega si ya hay personas</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
     </div>
@@ -241,8 +301,9 @@ Router.on("/admin/migracion", () => {
     return;
   }
   $app.innerHTML = `
-    <h1>Cargar Excel real</h1>
-    <p class="hint">Para la carga inicial de los jóvenes reales. Primero se muestra una vista previa (no guarda nada) — recién con "Confirmar" se escribe en la base. Se niega a correr si ya hay personas cargadas.</p>
+    ${botonAtras("/admin", "Administración")}
+    <h1>Cargar datos iniciales del Excel</h1>
+    <p class="hint">Solo para la primera vez: sube el archivo Excel real con los jóvenes para poblar la app. Primero se muestra una vista previa (no guarda nada) — recién con "Confirmar" se escribe en la base. Se niega a correr si ya hay personas cargadas.</p>
     <label>Archivo (.xlsx)</label>
     <input type="file" id="migracion-archivo" accept=".xlsx,.xlsm">
     <button class="primary" id="btn-vista-previa" type="button">Ver vista previa</button>
@@ -332,10 +393,23 @@ function badgeFicha(p) {
 }
 
 // --- Ver jóvenes registrados ---
+function etiquetaFiltroPersonas(filtro) {
+  return {
+    activos: "Activos",
+    inactivos: "Inactivos",
+    bautizados: "Bautizados",
+    servidores: "Sirviendo",
+    asistio30: "Asistieron en los últimos 30 días",
+  }[filtro] || null;
+}
+
 Router.on("/personas", async () => {
   if (!requiereSesion()) return;
+  const filtro = Router.query().get("filtro");
+  const etiqueta = etiquetaFiltroPersonas(filtro);
   $app.innerHTML = `
     <h1>Jóvenes registrados</h1>
+    ${etiqueta ? `<p class="hint">Mostrando: <strong>${etiqueta}</strong> — <a href="#/personas">quitar filtro</a></p>` : ""}
     <p>
       <a href="#/servidores/nuevo">+ Marcar nuevo servidor (reunión STAFF)</a><br>
       <a href="#/personas/incompletas">Ver fichas incompletas</a><br>
@@ -344,10 +418,20 @@ Router.on("/personas", async () => {
     <div id="lista-personas" class="hint">Cargando...</div>
   `;
   try {
-    const personas = await Api.personas();
+    const [activas, inactivas] = await Promise.all([Api.personas(true), Api.personas(false)]);
+    let personas = activas.concat(inactivas);
+    if (filtro === "activos") personas = activas;
+    else if (filtro === "inactivos") personas = inactivas;
+    else if (filtro === "bautizados") personas = personas.filter((p) => p.bautizado);
+    else if (filtro === "servidores") personas = personas.filter((p) => p.servidor);
+    else if (filtro === "asistio30") {
+      const asistieron = await Api.asistieron30Dias();
+      const ids = new Set(asistieron.map((p) => p.id));
+      personas = personas.filter((p) => ids.has(p.id));
+    }
     const cont = document.getElementById("lista-personas");
     if (!personas.length) {
-      cont.innerHTML = `<p class="hint">Todavía no hay jóvenes registrados.</p>`;
+      cont.innerHTML = `<p class="hint">${etiqueta ? "Nadie en esta categoría todavía." : "Todavía no hay jóvenes registrados."}</p>`;
       return;
     }
     cont.innerHTML = personas
@@ -457,7 +541,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
     : "";
 
   $app.innerHTML = `
-    <p><a href="#/personas">&larr; Volver a jóvenes</a></p>
+    ${botonAtras("/personas", "Jóvenes")}
     <h1>${persona.nombres} ${persona.apellidos}</h1>
     <p class="hint">${persona.id_unico}</p>
     ${seccionAlertas}
@@ -568,6 +652,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
 Router.on("/invitaciones", async () => {
   if (!requiereSesion()) return;
   $app.innerHTML = `
+    ${botonAtras("/personas", "Jóvenes")}
     <h1>Ranking de invitaciones</h1>
     <p class="hint">Quién invitó más jóvenes que se registraron en el período. Información para el equipo — qué hacer con esto (un reconocimiento, nada) lo deciden ustedes.</p>
     <div>
@@ -612,6 +697,7 @@ Router.on("/invitaciones", async () => {
 Router.on("/personas/incompletas", async () => {
   if (!requiereSesion()) return;
   $app.innerHTML = `
+    ${botonAtras("/personas", "Jóvenes")}
     <h1>Fichas incompletas</h1>
     <p class="hint">Ordenadas de menos a más completas. Esto es solo información operativa — nunca una conclusión sobre la persona.</p>
     <div id="lista-incompletas" class="hint">Cargando...</div>
@@ -645,6 +731,7 @@ Router.on("/personas/incompletas", async () => {
 Router.on("/servidores/nuevo", () => {
   if (!requiereSesion()) return;
   $app.innerHTML = `
+    ${botonAtras("/personas", "Jóvenes")}
     <h1>Nuevo servidor</h1>
     <p class="hint">Para la reunión de servidores (STAFF): busca al joven y tócalo para marcarlo como servidor con esta fecha.</p>
     <label>Fecha de integración</label>
@@ -683,6 +770,7 @@ Router.on("/usuarios", async () => {
     return;
   }
   $app.innerHTML = `
+    ${botonAtras("/admin", "Administración")}
     <h1>Usuarios</h1>
     <form id="form-usuario">
       <label>Nombre</label>
@@ -752,36 +840,94 @@ Router.on("/usuarios", async () => {
   cargarUsuarios();
 });
 
+// --- Selector de actividad, con soporte para "Otro" (texto libre) ---
+function opcionesActividades(actividades) {
+  return actividades.map((a) => `<option value="${a.id}" data-nombre="${a.nombre}">${a.nombre}</option>`).join("");
+}
+
+function esOtroSeleccionado(selectId) {
+  const opt = document.getElementById(selectId).selectedOptions[0];
+  return opt && opt.dataset.nombre === "Otro";
+}
+
+function wireOtroManual(selectId, slotId) {
+  const select = document.getElementById(selectId);
+  const slot = document.getElementById(slotId);
+  function actualizar() {
+    slot.innerHTML = esOtroSeleccionado(selectId)
+      ? `<label>¿Cuál evento?</label><input type="text" id="${selectId}-otro-texto" placeholder="Nombre del evento...">`
+      : "";
+  }
+  select.addEventListener("change", actualizar);
+  actualizar();
+}
+
+function nombreEventoElegido(selectId) {
+  const opt = document.getElementById(selectId).selectedOptions[0];
+  const otroInput = document.getElementById(`${selectId}-otro-texto`);
+  if (esOtroSeleccionado(selectId) && otroInput && otroInput.value.trim()) {
+    return otroInput.value.trim();
+  }
+  return opt ? opt.dataset.nombre : "Evento";
+}
+
 // --- Registrar asistencia ---
 Router.on("/asistencia", async () => {
   if (!requiereSesion()) return;
+  $app.innerHTML = `<p class="hint">Cargando actividades...</p>`;
+  let actividades;
+  try {
+    actividades = await Api.actividades();
+  } catch (e) {
+    $app.innerHTML = `<div class="error">${e.message}</div>`;
+    return;
+  }
+  if (!actividades.length) {
+    $app.innerHTML = `<p class="error">No hay actividades configuradas. Pedile a un administrador que cree una.</p>`;
+    return;
+  }
   $app.innerHTML = `
     <h1>Registrar asistencia</h1>
+    <p><a href="#/asistencia/importar">Importar lista pegada (WhatsApp)</a></p>
     <label>Actividad</label>
-    <select id="asis-actividad">
-      <option value="1">Culto Juvenil</option>
-    </select>
+    <select id="asis-actividad">${opcionesActividades(actividades)}</select>
+    <div id="asis-otro-slot"></div>
     <label>Fecha</label>
     <input type="date" id="asis-fecha" value="${new Date().toISOString().slice(0, 10)}">
     <button class="primary" id="asis-iniciar">Iniciar registro</button>
     <div id="asis-body"></div>
   `;
+  wireOtroManual("asis-actividad", "asis-otro-slot");
   document.getElementById("asis-iniciar").addEventListener("click", iniciarRegistroAsistencia);
 });
+
+function filaAsistencia(registro) {
+  const li = document.createElement("li");
+  li.innerHTML = `<span>✓ ${registro.persona_nombre}</span> <button type="button" class="quitar-asis" aria-label="Quitar a ${registro.persona_nombre}">✕</button>`;
+  li.querySelector(".quitar-asis").addEventListener("click", async () => {
+    if (!confirm(`¿Quitar a ${registro.persona_nombre} de esta asistencia?`)) return;
+    try {
+      await Api.quitarAsistencia(registro.id);
+      li.remove();
+      const contador = document.getElementById("conteo-asistieron");
+      contador.textContent = Math.max(0, Number(contador.textContent) - 1);
+    } catch (e) {
+      alert(`No se pudo quitar: ${e.message}`);
+    }
+  });
+  return li;
+}
 
 async function iniciarRegistroAsistencia() {
   const actividadId = Number(document.getElementById("asis-actividad").value);
   const fecha = document.getElementById("asis-fecha").value;
+  const nombreEvento = nombreEventoElegido("asis-actividad");
   const body = document.getElementById("asis-body");
   body.innerHTML = `<p class="hint">Cargando...</p>`;
 
   let evento;
   try {
-    evento = await Api.crearOReusarEvento({
-      actividad_id: actividadId,
-      nombre: `Culto Juvenil ${fecha}`,
-      fecha,
-    });
+    evento = await Api.crearOReusarEvento({ actividad_id: actividadId, nombre: `${nombreEvento} ${fecha}`, fecha });
   } catch (e) {
     body.innerHTML = `<div class="error">${e.message}</div>`;
     return;
@@ -794,16 +940,22 @@ async function iniciarRegistroAsistencia() {
     <div id="buscador-slot"></div>
     <h2>Asistieron (<span id="conteo-asistieron">0</span>)</h2>
     <ul class="lista-asistieron" id="lista-asistieron"></ul>
+    <button class="secundario" id="asis-finalizar" type="button">Finalizar registro</button>
+    <div id="asis-finalizar-msg"></div>
   `;
 
-  async function refrescarLista() {
+  async function cargarInicial() {
     const registros = await Api.verAsistenciaEvento(evento.id);
-    document.getElementById("conteo-asistieron").textContent = registros.length;
     const ul = document.getElementById("lista-asistieron");
-    ul.innerHTML = registros.length
-      ? ""
-      : `<li class="hint">Nadie registrado todavía.</li>`;
-    for (const r of registros) marcados.add(r.persona_id);
+    document.getElementById("conteo-asistieron").textContent = registros.length;
+    ul.innerHTML = "";
+    if (!registros.length) {
+      ul.innerHTML = `<li class="hint">Nadie registrado todavía.</li>`;
+    }
+    for (const r of registros) {
+      marcados.add(r.persona_id);
+      ul.appendChild(filaAsistencia(r));
+    }
   }
 
   const buscador = crearBuscadorPersonas({
@@ -814,14 +966,12 @@ async function iniciarRegistroAsistencia() {
         return;
       }
       try {
-        await Api.registrarAsistencia({ persona_id: candidato.persona_id, evento_id: evento.id, presente: true });
+        const registro = await Api.registrarAsistencia({ persona_id: candidato.persona_id, evento_id: evento.id, presente: true });
         marcados.add(candidato.persona_id);
         const ul = document.getElementById("lista-asistieron");
         const placeholder = ul.querySelector(".hint");
         if (placeholder) placeholder.remove();
-        const li = document.createElement("li");
-        li.textContent = `✓ ${candidato.nombre_completo}`;
-        ul.prepend(li);
+        ul.prepend(filaAsistencia(registro));
         document.getElementById("conteo-asistieron").textContent =
           Number(document.getElementById("conteo-asistieron").textContent) + 1;
       } catch (e) {
@@ -831,19 +981,33 @@ async function iniciarRegistroAsistencia() {
   });
   document.getElementById("buscador-slot").appendChild(buscador);
 
-  await refrescarLista();
+  document.getElementById("asis-finalizar").addEventListener("click", () => {
+    document.getElementById("asis-finalizar-msg").innerHTML = `
+      <div class="card">Listo — ${marcados.size} joven${marcados.size === 1 ? "" : "es"} registrado${marcados.size === 1 ? "" : "s"} para "${evento.nombre}". Ya quedó guardado; podés seguir agregando o salir cuando quieras.</div>
+    `;
+  });
+
+  await cargarInicial();
 }
 
 // --- Importar lista pegada (WhatsApp) ---
-Router.on("/asistencia/importar", () => {
+Router.on("/asistencia/importar", async () => {
   if (!requiereSesion()) return;
+  $app.innerHTML = `<p class="hint">Cargando actividades...</p>`;
+  let actividades;
+  try {
+    actividades = await Api.actividades();
+  } catch (e) {
+    $app.innerHTML = `<div class="error">${e.message}</div>`;
+    return;
+  }
   $app.innerHTML = `
+    ${botonAtras("/asistencia", "Asistencia")}
     <h1>Importar lista de asistencia</h1>
     <p class="hint">Pega el mensaje tal cual llega por WhatsApp. La primera línea con la palabra "asistencia" se ignora automáticamente.</p>
     <label>Actividad</label>
-    <select id="imp-actividad">
-      <option value="1">Culto Juvenil</option>
-    </select>
+    <select id="imp-actividad">${opcionesActividades(actividades)}</select>
+    <div id="imp-otro-slot"></div>
     <label>Fecha</label>
     <input type="date" id="imp-fecha" value="${new Date().toISOString().slice(0, 10)}">
     <label>Lista pegada</label>
@@ -851,19 +1015,21 @@ Router.on("/asistencia/importar", () => {
     <button class="primary" id="imp-procesar">Procesar</button>
     <div id="imp-resultado"></div>
   `;
+  wireOtroManual("imp-actividad", "imp-otro-slot");
   document.getElementById("imp-procesar").addEventListener("click", procesarListaImportada);
 });
 
 async function procesarListaImportada() {
   const actividad_id = Number(document.getElementById("imp-actividad").value);
   const fecha = document.getElementById("imp-fecha").value;
+  const nombre_evento = nombreEventoElegido("imp-actividad");
   const texto = document.getElementById("imp-texto").value;
   const resultado = document.getElementById("imp-resultado");
   resultado.innerHTML = `<p class="hint">Procesando...</p>`;
 
   let preview;
   try {
-    preview = await Api.previewImportarLista({ actividad_id, fecha, texto });
+    preview = await Api.previewImportarLista({ actividad_id, fecha, texto, nombre_evento });
   } catch (e) {
     resultado.innerHTML = `<div class="error">${e.message}</div>`;
     return;
