@@ -37,6 +37,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# El navegador solo detecta que hay un service worker nuevo si compara bytes
+# frescos de /service-worker.js — si el propio navegador (o un proxy/CDN
+# delante) lo sirve desde su caché HTTP, la comparación siempre da "igual"
+# y la actualización nunca se dispara, sin importar cuántas veces se
+# redespliegue el backend. Mismo problema con index.html: es el punto de
+# entrada de la SPA, tiene que revalidarse siempre. Esto es justamente lo
+# que causó que la app se quedara mostrando una versión vieja en producción
+# después de varios despliegues "exitosos".
+@app.middleware("http")
+async def sin_cache_para_el_shell(request, call_next):
+    response = await call_next(request)
+    if request.url.path in ("/service-worker.js", "/", "/index.html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 app.include_router(auth.router)
 app.include_router(personas.router)
 app.include_router(asistencia.router)
