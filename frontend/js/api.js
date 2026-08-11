@@ -62,10 +62,11 @@ const Api = (() => {
     setSession,
 
     dashboardResumen: () => request("/dashboard/resumen"),
+    asistieron30Dias: () => request("/dashboard/asistieron-30-dias"),
     alertasResumen: () => request("/dashboard/alertas-resumen"),
     alertasPersona: (personaId) => request(`/personas/${personaId}/alertas`),
 
-    personas: () => request("/personas"),
+    personas: (activo) => request(`/personas${activo === undefined ? "" : "?activo=" + activo}`),
     persona: (id) => request(`/personas/${id}`),
     editarPersona: (id, data) => request(`/personas/${id}`, { method: "PATCH", body: data }),
     crearPersona: (data) => request("/personas", { method: "POST", body: data }),

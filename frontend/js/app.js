@@ -1,6 +1,7 @@
 const $app = document.getElementById("app");
 const $tabbar = document.getElementById("tabbar");
 const $btnSalir = document.getElementById("btn-salir");
+const $btnAdminGear = document.getElementById("btn-admin-gear");
 
 // Política de acceso (definida por el usuario, 2026-08-10): el seguimiento
 // pastoral y el semáforo de asistencia son solo para líderes y encargados
@@ -26,6 +27,7 @@ $btnSalir.addEventListener("click", () => {
   Api.logout();
   $tabbar.hidden = true;
   $btnSalir.hidden = true;
+  $btnAdminGear.hidden = true;
   Router.navegar("/login");
 });
 
@@ -33,6 +35,7 @@ $btnSalir.addEventListener("click", () => {
 Router.on("/login", () => {
   $tabbar.hidden = true;
   $btnSalir.hidden = true;
+  $btnAdminGear.hidden = true;
   $app.innerHTML = `
     <h1>Ingresar</h1>
     <form id="form-login">
@@ -74,69 +77,161 @@ Router.on("/login", () => {
 Router.on("/panel", async () => {
   if (!requiereSesion()) return;
   const esAdmin = Api.rol() === "admin";
-  const linkUsuarios = esAdmin ? `<p><a href="#/usuarios">+ Gestionar usuarios (líderes)</a></p>` : "";
-  const linkExportar = esAdmin
-    ? `<p><a href="#" id="btn-exportar-excel">Descargar Excel (plantilla real)</a></p>
-       <p><a href="#/admin/migracion">Cargar Excel real (carga inicial)</a></p>`
-    : "";
-  $app.innerHTML = `<h1>Hola, ${Api.nombre()}</h1>${linkUsuarios}${linkExportar}<div id="stats" class="stat-grid"></div>`;
+  $btnAdminGear.hidden = !esAdmin;
+
+  $app.innerHTML = `
+    <h1>Hola, ${Api.nombre()}</h1>
+    <div class="grid-kpi" id="grid-kpi"></div>
+    <div id="semaforo-slot"></div>
+  `;
+
   try {
-    const r = await Api.dashboardResumen();
-    document.getElementById("stats").innerHTML = `
-      ${stat(r.total_jovenes, "Total jóvenes")}
-      ${stat(r.activos, "Activos")}
-      ${stat(r.bautizados, "Bautizados")}
-      ${stat(r.sirviendo, "Sirviendo")}
-      ${stat(r.asistieron_ultimos_30_dias, "Asistieron (30 días)")}
-    `;
+    const [resumen, activosCrudo, inactivosCrudo, bautizados30d] = await Promise.all([
+      Api.dashboardResumen(),
+      Api.personas(true),
+      Api.personas(false),
+      Api.asistieron30Dias(),
+    ]);
+    // PersonaOut no trae nombre_completo (solo nombres/apellidos por separado) —
+    // se completa acá para que las listas de las tarjetas puedan mostrar un nombre.
+    const conNombreCompleto = (p) => ({ ...p, nombre_completo: `${p.nombres} ${p.apellidos}` });
+    const activos = activosCrudo.map(conNombreCompleto);
+    const inactivos = inactivosCrudo.map(conNombreCompleto);
+    const todas = activos.concat(inactivos);
+    pintarKpis([
+      { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo") },
+      { label: "Activos", valor: resumen.activos, personas: activos, etiqueta: () => "activo" },
+      { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado" },
+      { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor" },
+      { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días." },
+    ]);
   } catch (e) {
-    $app.innerHTML += `<div class="error">${e.message}</div>`;
+    document.getElementById("grid-kpi").innerHTML = `<div class="error">${e.message}</div>`;
   }
 
   if (tieneAccesoPastoral()) {
     try {
       const a = await Api.alertasResumen();
-      $app.innerHTML += `
-        <h2>Semáforo de asistencia (últimos 30 días)</h2>
-        <p class="hint">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona.</p>
-        <div class="stat-grid">
-          ${stat(a.verde, "Verde")}
-          ${stat(a.amarillo, "Amarillo")}
-          ${stat(a.rojo, "Rojo")}
-          ${stat(a.sin_datos, "Sin datos")}
+      document.getElementById("semaforo-slot").innerHTML = `
+        <div class="card semaforo">
+          <h2 style="margin-top:0">Semáforo de asistencia · 30 días</h2>
+          <p class="aclaracion">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona.</p>
+          <div class="pastillas">
+            ${pastilla("verde", a.verde, "Verde")}
+            ${pastilla("amarillo", a.amarillo, "Amarillo")}
+            ${pastilla("rojo", a.rojo, "Rojo")}
+            ${pastilla("gris", a.sin_datos, "Sin datos")}
+          </div>
         </div>
       `;
     } catch (e) {
-      $app.innerHTML += `<div class="error">${e.message}</div>`;
+      document.getElementById("semaforo-slot").innerHTML = `<div class="error">${e.message}</div>`;
     }
   }
-
-  if (esAdmin) {
-    document.getElementById("btn-exportar-excel").addEventListener("click", async (e) => {
-      e.preventDefault();
-      const link = e.target;
-      const textoOriginal = link.textContent;
-      link.textContent = "Generando...";
-      try {
-        const blob = await Api.descargarExcel();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "MARCADOS_export.xlsx";
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        alert(err.message || "No se pudo generar el Excel.");
-      } finally {
-        link.textContent = textoOriginal;
-      }
-    });
-  }
 });
+
+function pastilla(clase, n, etiqueta) {
+  return `
+    <div class="pastilla ${clase}">
+      <span class="pastilla-punto"></span>
+      <div><span class="pastilla-n">${n}</span><span class="pastilla-t">${etiqueta}</span></div>
+    </div>
+  `;
+}
+
+// Tarjetas KPI del panel: se tocan y se abren mostrando la lista de
+// personas detrás del número — antes solo se veía el total.
+function pintarKpis(items) {
+  const grid = document.getElementById("grid-kpi");
+  grid.innerHTML = "";
+  items.forEach((item, idx) => {
+    const nombres = item.personas.slice(0, 6);
+    const art = document.createElement("article");
+    art.className = "kpi";
+    art.dataset.abierto = "false";
+    const idDet = `kpi-detalle-${idx}`;
+    const contenidoLista = nombres.length
+      ? `<ul class="kpi-lista">${nombres
+          .map((p) => `<li>${p.nombre_completo}<span class="badge ALTA">${item.etiqueta(p)}</span></li>`)
+          .join("")}</ul>
+         ${item.personas.length > nombres.length ? `<a class="kpi-vertodos" href="#/personas">Ver los ${item.personas.length} completos →</a>` : ""}`
+      : `<p class="kpi-vacio">${item.vacioTexto || "Nadie en esta categoría todavía."}</p>`;
+    art.innerHTML = `
+      <button class="kpi-cabecera" type="button" aria-expanded="false" aria-controls="${idDet}">
+        <span class="kpi-num">${item.valor}</span>
+        <span class="kpi-meta">
+          <span class="kpi-label">${item.label}</span>
+          <span class="kpi-flecha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+        </span>
+      </button>
+      <div class="kpi-detalle" id="${idDet}"><div class="kpi-detalle-int">${contenidoLista}</div></div>
+    `;
+    art.querySelector("button.kpi-cabecera").addEventListener("click", () => {
+      const abierto = art.dataset.abierto === "true";
+      art.dataset.abierto = abierto ? "false" : "true";
+      art.querySelector("button.kpi-cabecera").setAttribute("aria-expanded", String(!abierto));
+    });
+    grid.appendChild(art);
+  });
+}
 
 function stat(num, label) {
   return `<div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 }
+
+// --- Administración (solo admin) ---
+$btnAdminGear.addEventListener("click", () => Router.navegar("/admin"));
+
+Router.on("/admin", () => {
+  if (!requiereSesion()) return;
+  if (Api.rol() !== "admin") {
+    $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
+    return;
+  }
+  $app.innerHTML = `
+    <p><a href="#/panel">&larr; Volver al panel</a></p>
+    <h1>Administración</h1>
+    <p class="admin-sub">Acciones que solo ve el administrador — no aparecen para líderes ni consolidación.</p>
+    <div class="lista-admin">
+      <a class="fila-admin" href="#/usuarios">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2c2.6.4 4.5 2.6 4.5 5.3"/></svg></span>
+        <span class="fila-admin-texto"><strong>Gestionar usuarios</strong><small>Crear o desactivar líderes y encargados</small></span>
+        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </a>
+      <a class="fila-admin" href="#" id="btn-exportar-excel">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
+        <span class="fila-admin-texto"><strong>Descargar Excel</strong><small>Exporta con el diseño del libro real</small></span>
+        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </a>
+      <a class="fila-admin" href="#/admin/migracion">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
+        <span class="fila-admin-texto"><strong>Cargar Excel real</strong><small>Carga inicial — se niega si ya hay personas</small></span>
+        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </a>
+    </div>
+    <div class="error" id="admin-error"></div>
+  `;
+
+  document.getElementById("btn-exportar-excel").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const fila = e.currentTarget;
+    const textoOriginal = fila.querySelector("strong").textContent;
+    fila.querySelector("strong").textContent = "Generando...";
+    try {
+      const blob = await Api.descargarExcel();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "MARCADOS_export.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      document.getElementById("admin-error").textContent = err.message || "No se pudo generar el Excel.";
+    } finally {
+      fila.querySelector("strong").textContent = textoOriginal;
+    }
+  });
+});
 
 // --- Carga inicial: subir el Excel real (solo admin) ---
 Router.on("/admin/migracion", () => {
