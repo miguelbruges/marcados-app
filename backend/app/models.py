@@ -6,6 +6,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -268,3 +269,19 @@ class Bitacora(Base):
     valor_nuevo: Mapped[str | None] = mapped_column(Text, nullable=True)
     usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class PlantillaExcel(Base):
+    """El libro real usado como plantilla de exportación (sección 16.2).
+    Se guarda en la base — no en el disco del servidor — porque el disco
+    de Render es efímero (se pierde en cada deploy) y el administrador no
+    tiene forma de subir un archivo por SSH. Se sube una sola vez desde
+    Administración y sobrevive a cualquier redeploy. Solo existe una fila:
+    subir una nueva reemplaza la anterior."""
+
+    __tablename__ = "plantilla_excel"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nombre_archivo: Mapped[str] = mapped_column(String(255))
+    contenido: Mapped[bytes] = mapped_column(LargeBinary)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

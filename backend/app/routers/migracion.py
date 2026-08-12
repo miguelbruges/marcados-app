@@ -5,7 +5,9 @@ from app.database import get_db
 from app.deps import require_admin
 from app.models import Persona, Usuario
 from app.services.migracion_excel import (
+    aplicar_actualizacion,
     cargar_workbook,
+    comparar_actualizacion,
     ejecutar_migracion,
     hay_errores_bloqueantes,
     leer_catalogos,
@@ -72,3 +74,47 @@ async def migrar_excel(
     reporte["resultado"] = resultado
     reporte["mensaje"] = "Migración completa."
     return reporte
+
+
+@router.post("/excel-actualizar")
+async def actualizar_desde_excel(
+    archivo: UploadFile,
+    confirmar: bool = False,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(require_admin),
+):
+    """Round-trip: descargá el Excel real (Administración → Descargar
+    Excel), corregí lo que haga falta ahí, y subilo acá — actualiza a las
+    personas que coincidan por ID único (columna A), sin tocar a quien no
+    esté en el archivo. Nunca crea personas nuevas por esta vía (para eso
+    está 'Agregar joven' o la carga inicial) ni las borra. Mismo patrón de
+    vista previa + confirmar que la carga inicial: por defecto no escribe
+    nada, solo muestra qué cambiaría."""
+    if not archivo.filename or not archivo.filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(status_code=422, detail="El archivo debe ser un .xlsx o .xlsm")
+
+    try:
+        wb = cargar_workbook(archivo.file)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"No se pudo leer el archivo como Excel: {e}")
+
+    if "Jóvenes" not in wb.sheetnames:
+        raise HTTPException(status_code=422, detail="El archivo no tiene la hoja 'Jóvenes' esperada")
+
+    filas = leer_filas(wb)
+    comparacion = comparar_actualizacion(db, filas)
+
+    if not confirmar:
+        comparacion["vista_previa"] = True
+        comparacion["mensaje"] = (
+            "Vista previa: no se escribió nada. Confirmá para aplicar estos cambios."
+            if comparacion["personas_con_cambios"]
+            else "No hay ningún cambio para aplicar — el Excel coincide con lo que ya hay en la base."
+        )
+        return comparacion
+
+    resultado = aplicar_actualizacion(db, filas, admin.id)
+    comparacion["vista_previa"] = False
+    comparacion["resultado"] = resultado
+    comparacion["mensaje"] = f"Actualizadas {resultado['personas_actualizadas']} personas."
+    return comparacion

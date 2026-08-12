@@ -324,6 +324,139 @@ def hay_errores_bloqueantes(val: dict) -> bool:
     return bool(val["sin_id"] or val["ids_duplicados"] or val["sin_nombre"])
 
 
+# Campos que "Actualizar desde Excel" puede tocar en una persona EXISTENTE
+# (pedido del usuario, 2026-08-12: exportar, corregir en Excel, reimportar
+# y que se actualice — un round-trip, no solo la carga inicial). Reusa el
+# mismo mapeo de columnas que leer_filas(): el Excel exportado escribe en
+# las mismas columnas que este módulo sabe leer, así que el ida-y-vuelta
+# calza sin inventar un segundo formato.
+CAMPOS_ACTUALIZABLES = [
+    "nombres",
+    "apellidos",
+    "genero",
+    "fecha_nacimiento",
+    "edad_manual",
+    "estado",
+    "servidor",
+    "bautizado",
+    "estudio_biblico",
+    "telefono",
+    "correo_electronico",
+    "tiene_instagram",
+    "instagram",
+    "tiene_facebook",
+    "facebook",
+    "direccion",
+    "contacto_emergencia",
+    "parentesco",
+    "telefono_emergencia",
+    "grupo_sanguineo",
+    "eps",
+    "talla",
+    "como_llego",
+    "fecha_ingreso",
+    "fecha_bautismo",
+    "fecha_inicio_servicio",
+    "notas",
+]
+
+
+def _serializar(valor: Any) -> Any:
+    if isinstance(valor, (dt.date, dt.datetime)):
+        return valor.isoformat()
+    return valor
+
+
+# servidor/bautizado son NOT NULL en el modelo, así que leer_filas() ya
+# convierte una celda en blanco en False (no hay forma de distinguir "vacía"
+# de "No" a esta altura) — es el único caso donde una celda en blanco SÍ
+# puede aplicar un cambio. Para el resto de los campos, en cambio, una
+# celda en blanco significa "no toques esto", nunca "bórralo": el uso
+# esperado es exportar, corregir un puñado de celdas y volver a subir, no
+# reescribir la ficha completa desde un archivo armado a mano.
+_CAMPOS_DONDE_BLANCO_ES_VALOR_REAL = {"servidor", "bautizado"}
+
+
+def _diferencias_fila(persona: Persona, fila: dict) -> dict[str, tuple[Any, Any]]:
+    """{campo: (valor_actual, valor_nuevo)} solo para lo que de verdad
+    cambia. Una celda en blanco nunca borra un dato existente (salvo
+    servidor/bautizado, ver _CAMPOS_DONDE_BLANCO_ES_VALOR_REAL) — evita que
+    un Excel incompleto o desactualizado vacíe fichas reales por accidente."""
+    cambios: dict[str, tuple[Any, Any]] = {}
+    for campo in CAMPOS_ACTUALIZABLES:
+        nuevo = fila[campo]
+        if campo not in _CAMPOS_DONDE_BLANCO_ES_VALOR_REAL and (nuevo is None or nuevo == ""):
+            continue
+        if campo == "edad_manual" and nuevo is not None and not isinstance(nuevo, int):
+            continue  # texto raro en una columna numérica: no se aplica, no rompe el guardado
+        actual = getattr(persona, campo)
+        if actual != nuevo:
+            cambios[campo] = (actual, nuevo)
+    return cambios
+
+
+def comparar_actualizacion(db: Session, filas: list[dict]) -> dict[str, Any]:
+    """Compara filas leídas de un Excel (exportado y corregido a mano) contra
+    las personas existentes, por id_unico — NUNCA por nombre ni posición.
+    Solo lee y compara, no escribe nada."""
+    personas_por_id = {p.id_unico: p for p in db.query(Persona).all()}
+    coincidencias = []
+    sin_coincidencia = []
+    for f in filas:
+        persona = personas_por_id.get(f["id_unico"]) if f["id_unico"] else None
+        if not persona:
+            sin_coincidencia.append({"fila_excel": f["fila_excel"], "id_unico": f["id_unico"], "nombres": f["nombres"]})
+            continue
+        cambios = _diferencias_fila(persona, f)
+        if cambios:
+            coincidencias.append(
+                {
+                    "id_unico": persona.id_unico,
+                    "nombre_completo": persona.nombre_completo,
+                    "campos_cambiados": {
+                        campo: {"antes": _serializar(antes), "despues": _serializar(despues)}
+                        for campo, (antes, despues) in cambios.items()
+                    },
+                }
+            )
+
+    ids_en_excel = {f["id_unico"] for f in filas if f["id_unico"]}
+    sin_mencionar = [
+        {"id_unico": p.id_unico, "nombre_completo": p.nombre_completo}
+        for p in personas_por_id.values()
+        if p.id_unico not in ids_en_excel
+    ]
+    return {
+        "personas_con_cambios": coincidencias,
+        "filas_sin_coincidencia": sin_coincidencia,
+        "personas_sin_mencionar": sin_mencionar,
+    }
+
+
+def aplicar_actualizacion(db: Session, filas: list[dict], usuario_id: int | None) -> dict[str, int]:
+    """Escribe los cambios detectados por comparar_actualizacion() — cada
+    campo tocado queda en la Bitácora con su valor anterior y nuevo."""
+    from app.services.bitacora import registrar_cambios
+
+    personas_por_id = {p.id_unico: p for p in db.query(Persona).all()}
+    personas_actualizadas = 0
+    campos_actualizados = 0
+    for f in filas:
+        persona = personas_por_id.get(f["id_unico"]) if f["id_unico"] else None
+        if not persona:
+            continue
+        cambios = _diferencias_fila(persona, f)
+        if not cambios:
+            continue
+        for campo, (_antes, despues) in cambios.items():
+            setattr(persona, campo, despues)
+        registrar_cambios(db, tabla="personas", registro_id=persona.id, usuario_id=usuario_id, cambios=cambios)
+        personas_actualizadas += 1
+        campos_actualizados += len(cambios)
+    db.commit()
+    return {"personas_actualizadas": personas_actualizadas, "campos_actualizados": campos_actualizados}
+
+
 def cargar_catalogos(db: Session, catalogos: dict[str, list[str]]) -> int:
     """Carga idempotente: si (tipo, valor) ya existe, no lo duplica."""
     existentes = {(c.tipo, c.valor) for c in db.query(Catalogo).all()}

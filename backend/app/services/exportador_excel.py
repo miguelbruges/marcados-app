@@ -7,10 +7,9 @@ derivadas (Edad, Segmento, Ficha completa %, Datos faltantes, ID persona
 resuelto...) — Excel las recalcula solo al abrir el archivo.
 
 La plantilla NUNCA vive en este repositorio: contiene datos personales de
-menores de edad. Se configura vía EXCEL_TEMPLATE_PATH (ver app.config)
-apuntando a un archivo que el administrador sube directamente al
-servidor — igual que el resto de secretos de este proyecto (.env,
-credenciales), nunca a git.
+menores de edad. Se sube una vez desde Administración y queda guardada en
+la base de datos (tabla plantilla_excel) — el disco de Render es efímero,
+así que un archivo subido "a mano" al servidor no sobrevive a un redeploy.
 
 Seguimiento y Servicio no se exportan todavía: sus columnas en el Excel
 (Responsable, Resultado, Próxima acción / Área de servicio con relación
@@ -24,6 +23,7 @@ from __future__ import annotations
 import io
 from copy import copy
 from pathlib import Path
+from typing import BinaryIO
 
 import openpyxl
 from openpyxl.utils import get_column_letter
@@ -132,9 +132,11 @@ def _llenar_asistencia(ws: Worksheet, asistencias: list[Asistencia]) -> None:
         fila += 1
 
 
-def generar_export(db: Session, ruta_plantilla: Path) -> io.BytesIO:
-    """Devuelve un .xlsx en memoria — nunca se guarda en disco del repo."""
-    wb = openpyxl.load_workbook(ruta_plantilla)  # sin data_only: conserva las fórmulas
+def generar_export(db: Session, plantilla: Path | BinaryIO) -> io.BytesIO:
+    """Devuelve un .xlsx en memoria — nunca se guarda en disco del repo.
+    `plantilla` acepta una ruta (uso local) o un archivo en memoria
+    (BytesIO con el contenido guardado en la base, uso en producción)."""
+    wb = openpyxl.load_workbook(plantilla)  # sin data_only: conserva las fórmulas
 
     personas = db.scalars(select(Persona).order_by(Persona.id_unico)).all()
     _llenar_jovenes(wb["Jóvenes"], personas)

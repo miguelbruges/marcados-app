@@ -104,6 +104,67 @@ def test_export_endpoint_sin_plantilla_configurada_da_503(client, auth_headers):
         config.settings.excel_template_path = original
 
 
+def test_estado_plantilla_sin_ninguna_configurada(client, auth_headers):
+    resp = client.get("/export/plantilla/estado", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["configurada"] is False
+
+
+def test_subir_plantilla_y_luego_descargar_usa_la_guardada(client, auth_headers, plantilla):
+    with open(plantilla, "rb") as f:
+        resp = client.post(
+            "/export/plantilla",
+            files={"archivo": ("plantilla.xlsx", f, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 204
+
+    estado = client.get("/export/plantilla/estado", headers=auth_headers).json()
+    assert estado["configurada"] is True
+    assert estado["nombre_archivo"] == "plantilla.xlsx"
+
+    resp = client.get("/export/excel", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/vnd.openxmlformats")
+
+
+def test_subir_plantilla_reemplaza_la_anterior(client, auth_headers, plantilla):
+    with open(plantilla, "rb") as f:
+        client.post("/export/plantilla", files={"archivo": ("primera.xlsx", f, "application/octet-stream")}, headers=auth_headers)
+    with open(plantilla, "rb") as f:
+        client.post("/export/plantilla", files={"archivo": ("segunda.xlsx", f, "application/octet-stream")}, headers=auth_headers)
+
+    estado = client.get("/export/plantilla/estado", headers=auth_headers).json()
+    assert estado["nombre_archivo"] == "segunda.xlsx"
+
+
+def test_subir_plantilla_archivo_invalido_da_400(client, auth_headers):
+    resp = client.post(
+        "/export/plantilla",
+        files={"archivo": ("no-es-excel.xlsx", b"esto no es un excel", "application/octet-stream")},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+def test_subir_plantilla_no_admin_da_403(client, db_session, plantilla):
+    from app.models import RolUsuario, Usuario
+    from app.security import hash_password
+
+    lider = Usuario(nombre="Lider", email="lider9@marcadosapp.dev", password_hash=hash_password("x"), rol=RolUsuario.LIDER)
+    db_session.add(lider)
+    db_session.commit()
+    token = client.post("/auth/login", json={"email": "lider9@marcadosapp.dev", "password": "x"}).json()["access_token"]
+
+    with open(plantilla, "rb") as f:
+        resp = client.post(
+            "/export/plantilla",
+            files={"archivo": ("plantilla.xlsx", f, "application/octet-stream")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 403
+
+
 def test_export_endpoint_requiere_admin(client, db_session):
     from app.models import RolUsuario, Usuario
     from app.security import hash_password
