@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.routers import asistencia, auth, catalogos, dashboard, exportar, migracion, personas, seguimiento, usuarios
 from app.services.bootstrap import bootstrap_admin
+from app.services.schema_guard import asegurar_esquema_minimo
 
 
 @asynccontextmanager
@@ -17,6 +18,10 @@ async def lifespan(app: FastAPI):
     # gestiona con Alembic (ver backend/alembic/), nunca con create_all.
     if settings.environment == "development":
         Base.metadata.create_all(bind=engine)
+
+    # Red de seguridad además de (no en vez de) Alembic — ver
+    # app/services/schema_guard.py para el contexto de por qué hace falta.
+    asegurar_esquema_minimo(engine)
 
     db = SessionLocal()
     try:

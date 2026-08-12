@@ -28,11 +28,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "actividades",
-        sa.Column("cuenta_para_semaforo", sa.Boolean(), nullable=False, server_default=sa.true()),
-    )
     conn = op.get_bind()
+    insp = sa.inspect(conn)
+    columnas = {c["name"] for c in insp.get_columns("actividades")}
+    if "cuenta_para_semaforo" not in columnas:
+        # Idempotente a propósito: si una red de seguridad de arranque
+        # (app/services/schema_guard.py) ya la agregó porque esta misma
+        # migración no llegó a correr en un despliegue anterior, no vuelve
+        # a intentarlo — solo aplica la regla de negocio de abajo.
+        op.add_column(
+            "actividades",
+            sa.Column("cuenta_para_semaforo", sa.Boolean(), nullable=False, server_default=sa.true()),
+        )
     actividades = sa.table(
         "actividades",
         sa.column("nombre", sa.String),

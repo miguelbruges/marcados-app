@@ -368,24 +368,45 @@ Router.on("/admin", () => {
         <span class="fila-admin-texto"><strong>Gestionar usuarios</strong><small>Crear o desactivar líderes y encargados</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
+      <a class="fila-admin" href="#/admin/excel">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9.5 12.5l2 4M11.5 12.5l-2 4"/></svg></span>
+        <span class="fila-admin-texto"><strong>Excel</strong><small>Descargar, subir plantilla, cargar datos iniciales o actualizar</small></span>
+        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </a>
+    </div>
+  `;
+});
+
+// --- Excel: reúne las 4 acciones relacionadas (antes eran 4 filas sueltas
+// en Administración, quedaba abarrotado — pedido del usuario, 2026-08-12) ---
+Router.on("/admin/excel", () => {
+  if (!requiereSesion()) return;
+  if (Api.rol() !== "admin") {
+    $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
+    return;
+  }
+  $app.innerHTML = `
+    ${botonAtras("/admin", "Administración")}
+    <h1>Excel</h1>
+    <div class="lista-admin">
       <a class="fila-admin" href="#" id="btn-exportar-excel">
         <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
         <span class="fila-admin-texto"><strong>Descargar Excel</strong><small id="descargar-excel-sub">Exporta con el diseño del libro real</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
-      <a class="fila-admin" href="#/admin/plantilla">
-        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <span class="fila-admin-texto"><strong>Subir plantilla de Excel</strong><small>El libro real que se usa para "Descargar Excel" — se sube una sola vez</small></span>
+      <a class="fila-admin" href="#/admin/actualizar-excel">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
+        <span class="fila-admin-texto"><strong>Actualizar desde Excel</strong><small>Descargá, corregí en Excel y volvé a subirlo — actualiza solo lo que cambió</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
       <a class="fila-admin" href="#/admin/migracion">
         <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <span class="fila-admin-texto"><strong>Cargar datos iniciales del Excel</strong><small>Solo la primera vez — sube el Excel real para poblar la app. Se niega si ya hay personas</small></span>
+        <span class="fila-admin-texto"><strong>Cargar datos iniciales</strong><small>Solo la primera vez — sube el Excel real para poblar la app. Se niega si ya hay personas</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
-      <a class="fila-admin" href="#/admin/actualizar-excel">
-        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
-        <span class="fila-admin-texto"><strong>Actualizar desde Excel</strong><small>Descargá, corregí en Excel y volvé a subirlo — actualiza solo lo que cambió</small></span>
+      <a class="fila-admin" href="#/admin/plantilla">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
+        <span class="fila-admin-texto"><strong>Subir plantilla</strong><small>El libro real que se usa para "Descargar Excel" — se sube una sola vez</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
     </div>
@@ -418,7 +439,7 @@ Router.on("/admin", () => {
       if (!sub) return;
       sub.textContent = estado.configurada
         ? "Exporta con el diseño del libro real"
-        : "Hace falta subir la plantilla primero (Subir plantilla de Excel)";
+        : "Hace falta subir la plantilla primero (Subir plantilla)";
     })
     .catch(() => {});
 });
@@ -432,7 +453,7 @@ Router.on("/admin/plantilla", async () => {
   }
   const miToken = Router.token();
   $app.innerHTML = `
-    ${botonAtras("/admin", "Administración")}
+    ${botonAtras("/admin/excel", "Excel")}
     <h1>Plantilla de Excel</h1>
     <p class="hint">El libro real (con su diseño, fórmulas y catálogos) que usa "Descargar Excel" para exportar. Se guarda en la base de datos — sobrevive a cualquier actualización de la app, no hace falta subirlo de nuevo salvo que quieras cambiarlo.</p>
     <div id="plantilla-estado" class="hint">Consultando...</div>
@@ -483,7 +504,7 @@ Router.on("/admin/migracion", () => {
     return;
   }
   $app.innerHTML = `
-    ${botonAtras("/admin", "Administración")}
+    ${botonAtras("/admin/excel", "Excel")}
     <h1>Cargar datos iniciales del Excel</h1>
     <p class="hint">Solo para la primera vez: sube el archivo Excel real con los jóvenes para poblar la app. Primero se muestra una vista previa (no guarda nada) — recién con "Confirmar" se escribe en la base. Se niega a correr si ya hay personas cargadas.</p>
     <label>Archivo (.xlsx)</label>
@@ -572,7 +593,7 @@ Router.on("/admin/actualizar-excel", () => {
     return;
   }
   $app.innerHTML = `
-    ${botonAtras("/admin", "Administración")}
+    ${botonAtras("/admin/excel", "Excel")}
     <h1>Actualizar desde Excel</h1>
     <p class="hint">
       Descargá el Excel desde "Descargar Excel", corregí lo que haga falta ahí y subilo acá. Se actualiza solo a

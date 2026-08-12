@@ -23,13 +23,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "plantilla_excel",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("nombre_archivo", sa.String(length=255), nullable=False),
-        sa.Column("contenido", sa.LargeBinary(), nullable=False),
-        sa.Column("actualizado_en", sa.DateTime(), nullable=False),
-    )
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    if "plantilla_excel" not in insp.get_table_names():
+        # Idempotente a propósito: ver nota equivalente en la migración
+        # 69eb7f4522b9 — una red de seguridad de arranque puede haber
+        # creado esta tabla si esta migración no llegó a correr antes.
+        op.create_table(
+            "plantilla_excel",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("nombre_archivo", sa.String(length=255), nullable=False),
+            sa.Column("contenido", sa.LargeBinary(), nullable=False),
+            sa.Column("actualizado_en", sa.DateTime(), nullable=False),
+        )
 
 
 def downgrade() -> None:
