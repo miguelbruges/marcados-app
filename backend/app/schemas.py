@@ -33,6 +33,12 @@ class UsuarioOut(BaseModel):
     activo: bool
 
 
+class AreaServicioOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nombre: str
+
+
 # --- Persona ---
 class PersonaBase(BaseModel):
     nombres: str
@@ -118,10 +124,18 @@ class PersonaOut(PersonaBase):
     ficha_completa_pct: float = 100.0
     datos_faltantes: list[str] = []
     invitado_por_nombre: str | None = None
+    areas_servicio: list[AreaServicioOut] = []
 
 
 class MarcarServidorRequest(BaseModel):
     fecha_inicio_servicio: date | None = None  # si no se manda, el backend usa hoy
+
+
+class PersonaAreasUpdate(BaseModel):
+    """Reemplaza por completo el conjunto de áreas de servicio de la persona
+    (selección múltiple desde la ficha) — no es un PATCH incremental."""
+
+    area_ids: list[int]
 
 
 class PersonaResumen(BaseModel):
@@ -263,16 +277,11 @@ class CatalogoOut(BaseModel):
     valor: str
 
 
-class AreaServicioOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    nombre: str
-
-
 # --- Seguimiento ---
 class SeguimientoCreate(BaseModel):
     persona_id: int
     tipo: str | None = None
+    fecha: date | None = None  # si no se manda, el backend usa hoy
     notas: str
     requiere_atencion: bool = False
 

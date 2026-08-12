@@ -47,9 +47,7 @@ Router.on("/login", () => {
              autocapitalize="off" autocorrect="off" spellcheck="false">
       <button class="primary" type="submit">Entrar</button>
       <div class="error" id="login-error"></div>
-      <p class="hint" id="login-toggle-ver">
-        <label><input type="checkbox" id="login-ver-clave"> Mostrar contraseña</label>
-      </p>
+      <label class="check-label" id="login-toggle-ver"><input type="checkbox" id="login-ver-clave"> Mostrar contraseña</label>
     </form>
   `;
   document.getElementById("login-ver-clave").addEventListener("change", (e) => {
@@ -503,19 +501,24 @@ Router.on("/personas/ver", async () => {
   $app.innerHTML = `<p class="hint">Cargando ficha...</p>`;
   try {
     const accesoPastoral = tieneAccesoPastoral();
-    const [persona, alertas, seguimientos, catalogos] = await Promise.all([
+    const [persona, alertas, seguimientos, catalogos, areasDisponibles] = await Promise.all([
       Api.persona(id),
       accesoPastoral ? Api.alertasPersona(id) : Promise.resolve(null),
       accesoPastoral ? Api.historialSeguimiento(id) : Promise.resolve(null),
       cargarCatalogosFicha(),
+      Api.areasServicio().catch(() => []),
     ]);
-    renderFicha(persona, alertas, seguimientos, catalogos);
+    renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles);
   } catch (e) {
     $app.innerHTML = `<div class="error">${e.message}</div>`;
   }
 });
 
-function renderFicha(persona, alertas, seguimientos, catalogos) {
+// Tipos fijos de contacto pastoral — no es un catálogo administrable desde
+// Excel, es una lista corta y estable (pedido del usuario, 2026-08-12).
+const TIPOS_SEGUIMIENTO = ["Llamada", "Visita", "Mensaje", "Reunión personal", "Oración", "Otro"];
+
+function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles) {
   const seccionAlertas = alertas
     ? `
     <div class="stat-grid">
@@ -525,16 +528,27 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
     </div>`
     : `<div class="stat-grid">${stat(persona.ficha_completa_pct + "%", "Ficha completa")}</div>`;
 
+  const pendientesAtencion = (seguimientos || []).filter((s) => s.requiere_atencion).length;
   const seccionSeguimiento = seguimientos
     ? `
     <h2>Seguimiento pastoral</h2>
+    <p class="aviso-atencion" id="aviso-atencion" ${pendientesAtencion ? "" : "hidden"}>
+      ⚠ ${pendientesAtencion} registro${pendientesAtencion === 1 ? "" : "s"} marcado${pendientesAtencion === 1 ? "" : "s"} como "requiere atención"
+    </p>
     <div id="lista-seguimiento"></div>
     <form id="form-seguimiento">
       <label>Tipo</label>
-      <input type="text" id="seg-tipo" placeholder="llamada, visita, mensaje...">
-      <label>Notas</label>
-      <textarea id="seg-notas" required></textarea>
-      <label><input type="checkbox" id="seg-requiere-atencion"> Requiere atención</label>
+      <select id="seg-tipo">
+        <option value="">-- Seleccionar --</option>
+        ${TIPOS_SEGUIMIENTO.map((t) => `<option value="${t}">${t}</option>`).join("")}
+      </select>
+      <div id="seg-tipo-otro-slot"></div>
+      <label>Fecha</label>
+      <input type="date" id="seg-fecha" value="${new Date().toISOString().slice(0, 10)}">
+      <label>Observaciones</label>
+      <textarea id="seg-notas" required placeholder="Qué se conversó, cómo está, próximos pasos..."></textarea>
+      <label class="check-label"><input type="checkbox" id="seg-requiere-atencion"> Requiere atención</label>
+      <p class="hint">Quien lo revise después lo ve resaltado en el historial de esta persona — no manda ninguna alerta ni notificación por sí solo.</p>
       <button class="primary" type="submit">Agregar registro</button>
       <div class="error" id="seguimiento-error"></div>
     </form>`
@@ -569,18 +583,50 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
     return `<label>${etiqueta}</label><input type="${tipo}" data-campo="${campo}" value="${valor}">`;
   }
 
+  function areasHtml() {
+    const actuales = persona.areas_servicio || [];
+    if (!editando) {
+      return `<div class="hint"><strong>Áreas de servicio:</strong> ${actuales.length ? actuales.map((a) => a.nombre).join(", ") : "—"}</div>`;
+    }
+    if (!areasDisponibles.length) return "";
+    const actualesIds = new Set(actuales.map((a) => a.id));
+    return `
+      <label>Áreas de servicio</label>
+      <div class="check-grid">
+        ${areasDisponibles
+          .map(
+            (a) =>
+              `<label class="check-label"><input type="checkbox" data-area-id="${a.id}" ${actualesIds.has(a.id) ? "checked" : ""}> ${a.nombre}</label>`
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
   function pintarFicha() {
-    $form.innerHTML = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
+    const camposHtml = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
       const valor = persona[campo] ?? "";
       if (!editando) {
         return `<div class="hint"><strong>${etiqueta}:</strong> ${valor || "—"}</div>`;
       }
       return campoInput(campo, etiqueta, tipo, valor);
     }).join("");
-    if (editando) {
-      $form.innerHTML += `<button class="primary" type="submit">Guardar</button>`;
-    }
+
+    $form.innerHTML =
+      camposHtml +
+      areasHtml() +
+      (editando ? `<button class="primary" type="submit" id="btn-guardar-ficha" hidden>Guardar</button>` : "");
     $btnEditar.hidden = editando;
+
+    if (editando) {
+      const marcarCambio = () => {
+        document.getElementById("btn-guardar-ficha").hidden = false;
+      };
+      $form.querySelectorAll("[data-campo], [data-area-id]").forEach((el) => {
+        el.addEventListener("input", marcarCambio);
+        el.addEventListener("change", marcarCambio);
+      });
+    }
   }
   pintarFicha();
 
@@ -597,9 +643,20 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
     $form.querySelectorAll("[data-campo]").forEach((input) => {
       cambios[input.dataset.campo] = input.value || null;
     });
+    const areaIdsSeleccionados = [...$form.querySelectorAll("[data-area-id]:checked")].map((el) => Number(el.dataset.areaId));
+    const areaIdsActuales = (persona.areas_servicio || []).map((a) => a.id);
+    const areasCambiaron =
+      areaIdsSeleccionados.length !== areaIdsActuales.length ||
+      !areaIdsSeleccionados.every((id) => areaIdsActuales.includes(id));
+
     try {
-      const actualizada = await Api.editarPersona(persona.id, cambios);
-      Object.assign(persona, actualizada);
+      if (Object.keys(cambios).length) {
+        const actualizada = await Api.editarPersona(persona.id, cambios);
+        Object.assign(persona, actualizada);
+      }
+      if (areasCambiaron) {
+        persona.areas_servicio = await Api.actualizarAreasPersona(persona.id, areaIdsSeleccionados);
+      }
       editando = false;
       pintarFicha();
     } catch (err) {
@@ -609,6 +666,11 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
 
   if (seguimientos) {
     const $listaSeg = document.getElementById("lista-seguimiento");
+    document.getElementById("seg-tipo").addEventListener("change", (e) => {
+      const slot = document.getElementById("seg-tipo-otro-slot");
+      slot.innerHTML = e.target.value === "Otro" ? `<input type="text" id="seg-tipo-otro" placeholder="¿Cuál?">` : "";
+    });
+
     function pintarSeguimientos(lista) {
       if (!lista.length) {
         $listaSeg.innerHTML = `<p class="hint">Todavía no hay registros de seguimiento.</p>`;
@@ -624,6 +686,10 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
       `
         )
         .join("");
+      const avisoEl = document.getElementById("aviso-atencion");
+      const pendientes = lista.filter((s) => s.requiere_atencion).length;
+      avisoEl.hidden = !pendientes;
+      avisoEl.textContent = `⚠ ${pendientes} registro${pendientes === 1 ? "" : "s"} marcado${pendientes === 1 ? "" : "s"} como "requiere atención"`;
     }
     pintarSeguimientos(seguimientos);
 
@@ -631,16 +697,22 @@ function renderFicha(persona, alertas, seguimientos, catalogos) {
       e.preventDefault();
       const errorBox = document.getElementById("seguimiento-error");
       errorBox.textContent = "";
+      const tipoSeleccionado = document.getElementById("seg-tipo").value;
+      const tipoOtro = document.getElementById("seg-tipo-otro");
+      const tipo = tipoSeleccionado === "Otro" && tipoOtro && tipoOtro.value.trim() ? tipoOtro.value.trim() : tipoSeleccionado || null;
       try {
         await Api.crearSeguimiento({
           persona_id: persona.id,
-          tipo: document.getElementById("seg-tipo").value || null,
+          tipo,
+          fecha: document.getElementById("seg-fecha").value || null,
           notas: document.getElementById("seg-notas").value,
           requiere_atencion: document.getElementById("seg-requiere-atencion").checked,
         });
         const nuevos = await Api.historialSeguimiento(persona.id);
         pintarSeguimientos(nuevos);
         e.target.reset();
+        document.getElementById("seg-fecha").value = new Date().toISOString().slice(0, 10);
+        document.getElementById("seg-tipo-otro-slot").innerHTML = "";
       } catch (err) {
         errorBox.textContent = err.message || "No se pudo guardar el seguimiento.";
       }

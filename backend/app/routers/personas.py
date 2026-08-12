@@ -8,13 +8,15 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user, require_acceso_pastoral
 from app.matching import buscar_candidatos
-from app.models import Persona, Usuario
+from app.models import AreaServicio, Persona, PersonaArea, Usuario
 from app.schemas import (
+    AreaServicioOut,
     FichaIncompletaOut,
     InvitacionRankingOut,
     MarcarServidorRequest,
     MatchResponse,
     PersonaAlertasOut,
+    PersonaAreasUpdate,
     PersonaCreate,
     PersonaOut,
     PersonaUpdate,
@@ -198,6 +200,45 @@ def marcar_nuevo_servidor(
     db.commit()
     db.refresh(persona)
     return persona
+
+
+@router.put("/{persona_id}/areas", response_model=list[AreaServicioOut])
+def actualizar_areas_servicio(
+    persona_id: int,
+    data: PersonaAreasUpdate,
+    db: Session = Depends(get_db),
+    _usuario: Usuario = Depends(get_current_user),
+):
+    """Reemplaza el conjunto completo de áreas en las que sirve la persona
+    (selección múltiple desde la ficha). No borra el historial de
+    asignaciones previas — las que ya no aplican quedan con activo=False."""
+    persona = db.get(Persona, persona_id)
+    if not persona:
+        raise HTTPException(status_code=404, detail="Persona no encontrada")
+
+    if data.area_ids:
+        existentes = set(db.scalars(select(AreaServicio.id).where(AreaServicio.id.in_(data.area_ids))).all())
+        faltantes = set(data.area_ids) - existentes
+        if faltantes:
+            raise HTTPException(status_code=404, detail=f"Área(s) de servicio no encontrada(s): {sorted(faltantes)}")
+
+    seleccionadas = set(data.area_ids)
+    asignaciones = db.scalars(select(PersonaArea).where(PersonaArea.persona_id == persona_id)).all()
+    ya_asignadas = {a.area_servicio_id for a in asignaciones}
+
+    for asignacion in asignaciones:
+        asignacion.activo = asignacion.area_servicio_id in seleccionadas
+
+    for area_id in seleccionadas - ya_asignadas:
+        db.add(PersonaArea(persona_id=persona_id, area_servicio_id=area_id, fecha_inicio=date.today(), activo=True))
+
+    db.commit()
+    return db.scalars(
+        select(AreaServicio)
+        .join(PersonaArea, PersonaArea.area_servicio_id == AreaServicio.id)
+        .where(PersonaArea.persona_id == persona_id, PersonaArea.activo == True)  # noqa: E712
+        .order_by(AreaServicio.nombre)
+    ).all()
 
 
 @router.get("/buscar/coincidencias", response_model=MatchResponse)

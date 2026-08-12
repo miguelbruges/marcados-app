@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,7 +22,9 @@ def crear_seguimiento(
     equipo de consolidación (sección 20 del handoff)."""
     if not db.get(Persona, data.persona_id):
         raise HTTPException(status_code=404, detail="Persona no encontrada")
-    registro = Seguimiento(**data.model_dump(), autor_id=usuario.id)
+    campos = data.model_dump()
+    campos["fecha"] = campos["fecha"] or date.today()
+    registro = Seguimiento(**campos, autor_id=usuario.id)
     db.add(registro)
     db.commit()
     db.refresh(registro)

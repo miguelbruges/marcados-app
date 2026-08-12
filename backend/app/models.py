@@ -142,6 +142,10 @@ class Persona(Base):
         return self.invitado_por.nombre_completo if self.invitado_por else None
 
     @property
+    def areas_servicio(self) -> list["AreaServicio"]:
+        return [pa.area for pa in self.areas if pa.activo]
+
+    @property
     def ficha_completa_pct(self) -> float:
         from app.services.ficha_completa import calcular_ficha_completa  # evita import circular
 

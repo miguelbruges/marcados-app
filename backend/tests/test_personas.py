@@ -138,6 +138,47 @@ def test_fichas_incompletas_respeta_umbral_explicito_por_query(client, auth_head
     assert resp.json() == []
 
 
+def test_asignar_areas_servicio_a_persona(client, auth_headers, db_session):
+    from app.models import AreaServicio
+
+    area1 = AreaServicio(nombre="Alabanza")
+    area2 = AreaServicio(nombre="Logística")
+    db_session.add_all([area1, area2])
+    db_session.commit()
+
+    persona = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=auth_headers).json()
+
+    resp = client.put(f"/personas/{persona['id']}/areas", json={"area_ids": [area1.id, area2.id]}, headers=auth_headers)
+    assert resp.status_code == 200
+    nombres = {a["nombre"] for a in resp.json()}
+    assert nombres == {"Alabanza", "Logística"}
+
+    ficha = client.get(f"/personas/{persona['id']}", headers=auth_headers).json()
+    assert {a["nombre"] for a in ficha["areas_servicio"]} == {"Alabanza", "Logística"}
+
+
+def test_reemplazar_areas_servicio_quita_las_no_seleccionadas(client, auth_headers, db_session):
+    from app.models import AreaServicio
+
+    area1 = AreaServicio(nombre="Alabanza")
+    area2 = AreaServicio(nombre="Logística")
+    db_session.add_all([area1, area2])
+    db_session.commit()
+
+    persona = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=auth_headers).json()
+    client.put(f"/personas/{persona['id']}/areas", json={"area_ids": [area1.id, area2.id]}, headers=auth_headers)
+
+    resp = client.put(f"/personas/{persona['id']}/areas", json={"area_ids": [area1.id]}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert [a["nombre"] for a in resp.json()] == ["Alabanza"]
+
+
+def test_asignar_area_inexistente_da_404(client, auth_headers):
+    persona = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=auth_headers).json()
+    resp = client.put(f"/personas/{persona['id']}/areas", json={"area_ids": [9999]}, headers=auth_headers)
+    assert resp.status_code == 404
+
+
 def test_editar_persona_registra_bitacora_solo_de_lo_que_cambio(client, auth_headers, db_session):
     from app.models import Bitacora
 

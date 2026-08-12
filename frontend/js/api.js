@@ -77,6 +77,9 @@ const Api = (() => {
       request(`/personas/${personaId}/marcar-servidor`, { method: "POST", body: { fecha_inicio_servicio } }),
     fichasIncompletas: () => request("/personas/fichas-incompletas"),
     invitacionesResumen: (periodo) => request(`/personas/invitaciones-resumen?periodo=${periodo}`),
+    areasServicio: () => request("/areas-servicio"),
+    actualizarAreasPersona: (personaId, areaIds) =>
+      request(`/personas/${personaId}/areas`, { method: "PUT", body: { area_ids: areaIds } }),
     historialSeguimiento: (personaId) => request(`/seguimiento/persona/${personaId}`),
     crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
     catalogo: (tipo) => request(`/catalogos/${tipo}`),

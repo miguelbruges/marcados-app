@@ -159,7 +159,7 @@ label {
   font-weight: 600;
 }
 
-input, select, textarea {
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
   width: 100%;
   padding: 0.65rem;
   border: 1px solid var(--borde);
@@ -168,6 +168,42 @@ input, select, textarea {
   background: var(--superficie);
   color: var(--texto);
   font-family: inherit;
+}
+
+/* --- Checkboxes/radios: nunca deben heredar el ancho 100% de arriba, y la
+   etiqueta que los envuelve necesita ser una fila, no un bloque --- */
+input[type="checkbox"], input[type="radio"] {
+  width: auto;
+  accent-color: var(--morado-600);
+  flex: none;
+}
+
+label.check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.7rem 0;
+  font-weight: 500;
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.15rem 0.8rem;
+  margin: 0.3rem 0 0.8rem;
+}
+.check-grid label.check-label { margin: 0.3rem 0; }
+
+.aviso-atencion {
+  background: var(--rojo-fondo);
+  color: var(--rojo);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin: 0 0 0.8rem;
 }
 
 button.primary {
