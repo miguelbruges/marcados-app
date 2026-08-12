@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
-from app.routers import asistencia, auth, catalogos, dashboard, exportar, migracion, personas, seguimiento, usuarios
+from app.routers import asistencia, auth, catalogos, dashboard, exportar, migracion, personas, seguimiento, telegram, usuarios
 from app.services.bootstrap import bootstrap_admin
 from app.services.schema_guard import asegurar_esquema_minimo
 
@@ -67,6 +67,7 @@ app.include_router(seguimiento.router)
 app.include_router(usuarios.router)
 app.include_router(exportar.router)
 app.include_router(migracion.router)
+app.include_router(telegram.router)
 
 
 @app.get("/health")

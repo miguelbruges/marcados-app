@@ -26,3 +26,5 @@ services:
         sync: false # email del primer usuario admin
       - key: ADMIN_BOOTSTRAP_PASSWORD
         sync: false # contraseña del primer usuario admin
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false # opcional — bot de Telegram de solo consulta, token de @BotFather

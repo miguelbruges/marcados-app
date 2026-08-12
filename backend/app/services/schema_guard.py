@@ -64,3 +64,32 @@ def asegurar_esquema_minimo(engine: Engine) -> None:
                         """
                     )
                 )
+
+    if "usuarios" in insp.get_table_names() and "telegram_sesiones" not in insp.get_table_names():
+        with engine.begin() as conn:
+            if es_postgres:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE telegram_sesiones (
+                            id SERIAL PRIMARY KEY,
+                            chat_id VARCHAR(64) NOT NULL UNIQUE,
+                            usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                            creado_en TIMESTAMP NOT NULL
+                        )
+                        """
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE telegram_sesiones (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            chat_id VARCHAR(64) NOT NULL UNIQUE,
+                            usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                            creado_en DATETIME NOT NULL
+                        )
+                        """
+                    )
+                )

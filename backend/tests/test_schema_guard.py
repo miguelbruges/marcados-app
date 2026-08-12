@@ -66,3 +66,19 @@ def test_es_seguro_correr_dos_veces_seguidas(tmp_path):
     insp = inspect(engine)
     assert "cuenta_para_semaforo" in {c["name"] for c in insp.get_columns("actividades")}
     assert "plantilla_excel" in insp.get_table_names()
+
+
+def test_crea_telegram_sesiones_si_falta_y_hay_usuarios(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'sin_telegram.db'}")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE usuarios (id INTEGER PRIMARY KEY, email TEXT)"))
+
+    asegurar_esquema_minimo(engine)
+
+    assert "telegram_sesiones" in inspect(engine).get_table_names()
+
+
+def test_no_crea_telegram_sesiones_si_no_existe_la_tabla_usuarios(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'sin_usuarios.db'}")
+    asegurar_esquema_minimo(engine)  # esquema completamente vacío: no debe explotar
+    assert "telegram_sesiones" not in inspect(engine).get_table_names()

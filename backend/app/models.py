@@ -294,3 +294,19 @@ class PlantillaExcel(Base):
     nombre_archivo: Mapped[str] = mapped_column(String(255))
     contenido: Mapped[bytes] = mapped_column(LargeBinary)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TelegramSesion(Base):
+    """Vincula un chat de Telegram con un Usuario ya existente de MARCADOS,
+    tras /login dentro del bot — el bot nunca tiene credenciales propias,
+    reusa el mismo usuario/rol de la app (mismos permisos, sección 20 del
+    handoff: nunca más acceso del que ya tenía esa persona)."""
+
+    __tablename__ = "telegram_sesiones"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    creado_en: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    usuario: Mapped["Usuario"] = relationship()

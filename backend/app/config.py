@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # usuario, 2026-08-12: con 1 sola asistencia el sistema mostraba verde
     # sin que eso significara nada confiable).
     alertas_minimo_eventos: int = 2
+    # Bot de Telegram de solo consulta (sección 19 del handoff). Sin este
+    # token el webhook responde 503 en vez de fallar de forma confusa — se
+    # obtiene hablándole a @BotFather en Telegram, nunca vive en el repo.
+    telegram_bot_token: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
