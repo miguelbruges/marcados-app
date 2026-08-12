@@ -2,6 +2,7 @@ const $app = document.getElementById("app");
 const $tabbar = document.getElementById("tabbar");
 const $btnSalir = document.getElementById("btn-salir");
 const $btnAdminGear = document.getElementById("btn-admin-gear");
+const $btnAlertas = document.getElementById("btn-alertas");
 
 // Política de acceso (definida por el usuario, 2026-08-10): el seguimiento
 // pastoral y el semáforo de asistencia son solo para líderes y encargados
@@ -28,14 +29,43 @@ $btnSalir.addEventListener("click", () => {
   $tabbar.hidden = true;
   $btnSalir.hidden = true;
   $btnAdminGear.hidden = true;
+  $btnAlertas.hidden = true;
   Router.navegar("/login");
 });
+
+$btnAlertas.addEventListener("click", () => Router.navegar("/alertas"));
+
+// Cuenta cuántas cosas hay para revisar (semáforo en rojo + fichas
+// incompletas + seguimientos "requiere atención") y lo muestra como
+// contador sobre la campanita — todo agregado de datos que ya existían,
+// nunca una conclusión nueva (pedido del usuario, 2026-08-12).
+async function actualizarBadgeAlertas() {
+  if (!tieneAccesoPastoral()) {
+    $btnAlertas.hidden = true;
+    return;
+  }
+  $btnAlertas.hidden = false;
+  try {
+    const [rojos, incompletas, atencion] = await Promise.all([
+      Api.alertasDetalle("rojo"),
+      Api.fichasIncompletas(),
+      Api.seguimientosRequierenAtencion(),
+    ]);
+    const total = rojos.length + incompletas.length + atencion.length;
+    const badge = document.getElementById("badge-alertas");
+    badge.hidden = total === 0;
+    badge.textContent = total > 99 ? "99+" : String(total);
+  } catch (e) {
+    // silencioso: si falla, el botón sigue llevando a /alertas igual.
+  }
+}
 
 // --- Login ---
 Router.on("/login", () => {
   $tabbar.hidden = true;
   $btnSalir.hidden = true;
   $btnAdminGear.hidden = true;
+  $btnAlertas.hidden = true;
   $app.innerHTML = `
     <h1>Ingresar</h1>
     <form id="form-login">
@@ -74,14 +104,22 @@ Router.on("/login", () => {
 // --- Panel ---
 Router.on("/panel", async () => {
   if (!requiereSesion()) return;
+  const miToken = Router.token();
   const esAdmin = Api.rol() === "admin";
   $btnAdminGear.hidden = !esAdmin;
 
   $app.innerHTML = `
     <h1>Hola, ${Api.nombre()}</h1>
+    <div class="buscador-general" id="buscador-panel-slot"></div>
     <div class="grid-kpi" id="grid-kpi"></div>
     <div id="semaforo-slot"></div>
   `;
+
+  const buscador = crearBuscadorPersonas({
+    placeholder: "Buscar joven por nombre...",
+    onSeleccionar: (candidato) => Router.navegar(`/personas/ver?id=${candidato.persona_id}`),
+  });
+  document.getElementById("buscador-panel-slot").appendChild(buscador);
 
   try {
     const [resumen, activosCrudo, inactivosCrudo, bautizados30d] = await Promise.all([
@@ -90,6 +128,7 @@ Router.on("/panel", async () => {
       Api.personas(false),
       Api.asistieron30Dias(),
     ]);
+    if (!Router.vigente(miToken)) return;
     // PersonaOut no trae nombre_completo (solo nombres/apellidos por separado) —
     // se completa acá para que las listas de las tarjetas puedan mostrar un nombre.
     const conNombreCompleto = (p) => ({ ...p, nombre_completo: `${p.nombres} ${p.apellidos}` });
@@ -104,11 +143,15 @@ Router.on("/panel", async () => {
       { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
     ]);
   } catch (e) {
+    if (!Router.vigente(miToken)) return;
     document.getElementById("grid-kpi").innerHTML = `<div class="error">${e.message}</div>`;
   }
 
   if (tieneAccesoPastoral()) {
     await cargarSemaforo(30);
+    actualizarBadgeAlertas();
+  } else {
+    $btnAlertas.hidden = true;
   }
 });
 
@@ -120,14 +163,22 @@ let semaforoNivelAbierto = null;
 async function cargarSemaforo(ventanaDias) {
   const slot = document.getElementById("semaforo-slot");
   if (!slot) return;
+  const miToken = Router.token();
   semaforoNivelAbierto = null;
   slot.innerHTML = `<p class="hint">Cargando semáforo...</p>`;
   try {
     const a = await Api.alertasResumen(ventanaDias);
+    if (!Router.vigente(miToken)) return;
     slot.innerHTML = `
       <div class="card semaforo">
         <h2 style="margin-top:0">Semáforo de asistencia</h2>
-        <p class="aclaracion">Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona. Tocá un color para ver quiénes son.</p>
+        <p class="aclaracion">
+          Se calcula sobre los <strong>Encuentro Marcados</strong> del período: Verde = 85% o más de asistencia,
+          Amarillo = entre 50% y 84%, Rojo = menos de 50%. "Sin datos" significa que en este período todavía no
+          hubo al menos 2 Encuentros para poder calcular algo confiable — no que a alguien le falte historial.
+          Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona. Tocá un color
+          para ver quiénes son.
+        </p>
         <div class="periodo-chips">
           ${PERIODOS_SEMAFORO.map(
             (d) => `<button type="button" class="chip-periodo ${d === ventanaDias ? "activo" : ""}" data-dias="${d}">${d} días</button>`
@@ -149,6 +200,7 @@ async function cargarSemaforo(ventanaDias) {
       btn.addEventListener("click", () => alternarDetalleSemaforo(btn, ventanaDias));
     });
   } catch (e) {
+    if (!Router.vigente(miToken)) return;
     slot.innerHTML = `<div class="error">${e.message}</div>`;
   }
 }
@@ -184,6 +236,66 @@ function pastilla(clase, n, etiqueta, nivel) {
     </button>
   `;
 }
+
+// --- Centro de alertas: agrupa cosas que ya existían pero no se veían
+// juntas en ningún lado (semáforo en rojo, fichas incompletas, seguimiento
+// que requiere atención) — nada de esto es un cálculo nuevo, es la misma
+// información operativa reunida para saber qué revisar primero. Nunca una
+// conclusión espiritual — pedido del usuario, 2026-08-12. ---
+Router.on("/alertas", async () => {
+  if (!requiereSesion()) return;
+  if (!tieneAccesoPastoral()) {
+    $app.innerHTML = `<p class="error">Esta sección es solo para líderes y encargados.</p>`;
+    return;
+  }
+  const miToken = Router.token();
+  $app.innerHTML = `
+    ${botonAtras("/panel", "Panel")}
+    <h1>Alertas</h1>
+    <p class="hint">Todo lo de acá es información operativa para decidir qué revisar primero — nunca una conclusión sobre nadie.</p>
+    <div id="alertas-cuerpo"><p class="hint">Cargando...</p></div>
+  `;
+  try {
+    const [rojos, incompletas, atencion] = await Promise.all([
+      Api.alertasDetalle("rojo"),
+      Api.fichasIncompletas(),
+      Api.seguimientosRequierenAtencion(),
+    ]);
+    if (!Router.vigente(miToken)) return;
+    document.getElementById("alertas-cuerpo").innerHTML = `
+      <h2>Semáforo en rojo · 30 días (${rojos.length})</h2>
+      ${
+        rojos.length
+          ? `<ul class="kpi-lista">${rojos.map((p) => `<li><a href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a></li>`).join("")}</ul>`
+          : `<p class="hint">Nadie en rojo ahora mismo.</p>`
+      }
+
+      <h2>Fichas incompletas (${incompletas.length})</h2>
+      ${
+        incompletas.length
+          ? `<ul class="kpi-lista">${incompletas
+              .map(
+                (p) =>
+                  `<li><a href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a><span class="badge ${nivelFicha(p.ficha_completa_pct)}">${p.ficha_completa_pct}%</span></li>`
+              )
+              .join("")}</ul>`
+          : `<p class="hint">Todas las fichas activas están por encima del umbral.</p>`
+      }
+
+      <h2>Seguimientos que requieren atención (${atencion.length})</h2>
+      ${
+        atencion.length
+          ? `<ul class="kpi-lista">${atencion
+              .map((s) => `<li><a href="#/personas/ver?id=${s.persona_id}">${s.persona_nombre}</a><span class="hint">${s.fecha}</span></li>`)
+              .join("")}</ul>`
+          : `<p class="hint">Nada pendiente.</p>`
+      }
+    `;
+  } catch (e) {
+    if (!Router.vigente(miToken)) return;
+    document.getElementById("alertas-cuerpo").innerHTML = `<div class="error">${e.message}</div>`;
+  }
+});
 
 // Tarjetas KPI del panel: se tocan y se abren mostrando la lista de
 // personas detrás del número — antes solo se veía el total.
@@ -401,22 +513,52 @@ function etiquetaFiltroPersonas(filtro) {
   }[filtro] || null;
 }
 
+function normalizarTexto(s) {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
+function filaPersona(p) {
+  return `
+    <a class="card-link" href="#/personas/ver?id=${p.id}">
+    <div class="card">
+      <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
+      <div class="hint">
+        ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
+        ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
+      </div>
+      <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
+    </div>
+    </a>
+  `;
+}
+
 Router.on("/personas", async () => {
   if (!requiereSesion()) return;
+  const miToken = Router.token();
   const filtro = Router.query().get("filtro");
   const etiqueta = etiquetaFiltroPersonas(filtro);
   $app.innerHTML = `
     <h1>Jóvenes registrados</h1>
     ${etiqueta ? `<p class="hint">Mostrando: <strong>${etiqueta}</strong> — <a href="#/personas">quitar filtro</a></p>` : ""}
-    <p>
-      <a href="#/servidores/nuevo">+ Marcar nuevo servidor (reunión STAFF)</a><br>
-      <a href="#/personas/incompletas">Ver fichas incompletas</a><br>
-      <a href="#/invitaciones">Ranking de invitaciones</a>
-    </p>
+    <input type="search" id="buscador-jovenes" placeholder="Buscar por nombre..." autocomplete="off">
+    <div class="accesos-rapidos">
+      <a class="acceso-rapido" href="#/personas/incompletas">
+        <span class="acceso-rapido-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12h6M9 16h6M9 8h2"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg></span>
+        Fichas incompletas
+      </a>
+      <a class="acceso-rapido" href="#/invitaciones">
+        <span class="acceso-rapido-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/><path d="M8.5 14 6 21l6-3 6 3-2.5-7"/></svg></span>
+        Ranking de invitaciones
+      </a>
+    </div>
     <div id="lista-personas" class="hint">Cargando...</div>
   `;
   try {
     const [activas, inactivas] = await Promise.all([Api.personas(true), Api.personas(false)]);
+    if (!Router.vigente(miToken)) return;
     let personas = activas.concat(inactivas);
     if (filtro === "activos") personas = activas;
     else if (filtro === "inactivos") personas = inactivas;
@@ -424,31 +566,36 @@ Router.on("/personas", async () => {
     else if (filtro === "servidores") personas = personas.filter((p) => p.servidor);
     else if (filtro === "asistio30") {
       const asistieron = await Api.asistieron30Dias();
+      if (!Router.vigente(miToken)) return;
       const ids = new Set(asistieron.map((p) => p.id));
       personas = personas.filter((p) => ids.has(p.id));
     }
+
     const cont = document.getElementById("lista-personas");
-    if (!personas.length) {
-      cont.innerHTML = `<p class="hint">${etiqueta ? "Nadie en esta categoría todavía." : "Todavía no hay jóvenes registrados."}</p>`;
-      return;
+    function pintar(lista) {
+      if (!lista.length) {
+        cont.innerHTML = `<p class="hint">${etiqueta ? "Nadie en esta categoría todavía." : "Todavía no hay jóvenes registrados."}</p>`;
+        return;
+      }
+      cont.innerHTML = lista.map(filaPersona).join("");
     }
-    cont.innerHTML = personas
-      .map(
-        (p) => `
-      <a class="card-link" href="#/personas/ver?id=${p.id}">
-      <div class="card">
-        <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
-        <div class="hint">
-          ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
-          ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
-        </div>
-        <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
-      </div>
-      </a>
-    `
-      )
-      .join("");
+    pintar(personas);
+
+    document.getElementById("buscador-jovenes").addEventListener("input", (e) => {
+      const q = normalizarTexto(e.target.value.trim());
+      if (!q) {
+        pintar(personas);
+        return;
+      }
+      const filtradas = personas.filter((p) => normalizarTexto(`${p.nombres} ${p.apellidos}`).includes(q));
+      if (!filtradas.length) {
+        cont.innerHTML = `<p class="hint">Nadie coincide con "${e.target.value.trim()}".</p>`;
+        return;
+      }
+      cont.innerHTML = filtradas.map(filaPersona).join("");
+    });
   } catch (e) {
+    if (!Router.vigente(miToken)) return;
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }
 });
@@ -498,6 +645,7 @@ Router.on("/personas/ver", async () => {
     Router.navegar("/personas");
     return;
   }
+  const miToken = Router.token();
   $app.innerHTML = `<p class="hint">Cargando ficha...</p>`;
   try {
     const accesoPastoral = tieneAccesoPastoral();
@@ -508,8 +656,10 @@ Router.on("/personas/ver", async () => {
       cargarCatalogosFicha(),
       Api.areasServicio().catch(() => []),
     ]);
+    if (!Router.vigente(miToken)) return;
     renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles);
   } catch (e) {
+    if (!Router.vigente(miToken)) return;
     $app.innerHTML = `<div class="error">${e.message}</div>`;
   }
 });
@@ -517,6 +667,43 @@ Router.on("/personas/ver", async () => {
 // Tipos fijos de contacto pastoral — no es un catálogo administrable desde
 // Excel, es una lista corta y estable (pedido del usuario, 2026-08-12).
 const TIPOS_SEGUIMIENTO = ["Llamada", "Visita", "Mensaje", "Reunión personal", "Oración", "Otro"];
+
+// --- Estado de servicio: botón directo en la ficha (reemplaza la pantalla
+// aparte "Nuevo servidor (reunión STAFF)", pedido del usuario, 2026-08-12).
+// Distingue servidor ACTIVO de servidor INACTIVO (fue servidor, ya no) a
+// partir de servidor + fecha_inicio_servicio — no hace falta un campo nuevo. ---
+function pintarServicio(persona) {
+  const slot = document.getElementById("servicio-slot");
+  if (!slot) return;
+  const fueServidor = !!persona.fecha_inicio_servicio;
+  let texto, boton;
+  if (persona.servidor) {
+    texto = `<strong>Servidor activo</strong><small>${fueServidor ? `Desde ${persona.fecha_inicio_servicio}` : ""}</small>`;
+    boton = `<button type="button" class="btn-servidor quitar" id="btn-toggle-servidor">Quitar de servidor</button>`;
+  } else if (fueServidor) {
+    texto = `<strong>Servidor inactivo</strong><small>Fue servidor desde ${persona.fecha_inicio_servicio}, ya no está sirviendo</small>`;
+    boton = `<button type="button" class="btn-servidor marcar" id="btn-toggle-servidor">Reactivar como servidor</button>`;
+  } else {
+    texto = `<strong>No es servidor</strong><small>Solo asiste</small>`;
+    boton = `<button type="button" class="btn-servidor marcar" id="btn-toggle-servidor">Marcar como servidor</button>`;
+  }
+  slot.innerHTML = `<div class="servicio-card"><div class="servicio-card-texto">${texto}</div>${boton}</div>`;
+
+  document.getElementById("btn-toggle-servidor").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const actualizada = persona.servidor
+        ? await Api.editarPersona(persona.id, { servidor: false })
+        : await Api.marcarServidor(persona.id);
+      Object.assign(persona, actualizada);
+      pintarServicio(persona);
+    } catch (err) {
+      btn.disabled = false;
+      alert(`No se pudo actualizar: ${err.message}`);
+    }
+  });
+}
 
 function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles) {
   const seccionAlertas = alertas
@@ -561,6 +748,8 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     ${seccionAlertas}
     ${persona.datos_faltantes.length ? `<p class="hint">Faltan: ${persona.datos_faltantes.join(", ")}</p>` : ""}
 
+    <div id="servicio-slot"></div>
+
     <h2>Datos</h2>
     <form id="form-ficha"></form>
     <button id="btn-editar-ficha" class="secundario">Editar</button>
@@ -568,6 +757,8 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
 
     ${seccionSeguimiento}
   `;
+
+  pintarServicio(persona);
 
   let editando = false;
   const $form = document.getElementById("form-ficha");
@@ -800,40 +991,6 @@ Router.on("/personas/incompletas", async () => {
 });
 
 // --- Marcar nuevo servidor (reunión STAFF) ---
-Router.on("/servidores/nuevo", () => {
-  if (!requiereSesion()) return;
-  $app.innerHTML = `
-    ${botonAtras("/personas", "Jóvenes")}
-    <h1>Nuevo servidor</h1>
-    <p class="hint">Para la reunión de servidores (STAFF): busca al joven y tócalo para marcarlo como servidor con esta fecha.</p>
-    <label>Fecha de integración</label>
-    <input type="date" id="serv-fecha" value="${new Date().toISOString().slice(0, 10)}">
-    <label>Buscar joven</label>
-    <div id="serv-buscador-slot"></div>
-    <h2>Marcados hoy en esta sesión</h2>
-    <ul class="lista-asistieron" id="serv-lista"><li class="hint">Nadie todavía.</li></ul>
-  `;
-
-  const buscador = crearBuscadorPersonas({
-    placeholder: "Nombre del joven...",
-    onSeleccionar: async (candidato) => {
-      const fecha = document.getElementById("serv-fecha").value;
-      try {
-        await Api.marcarServidor(candidato.persona_id, fecha);
-        const ul = document.getElementById("serv-lista");
-        const placeholder = ul.querySelector(".hint");
-        if (placeholder) placeholder.remove();
-        const li = document.createElement("li");
-        li.textContent = `✓ ${candidato.nombre_completo} — servidor desde ${fecha}`;
-        ul.prepend(li);
-      } catch (e) {
-        alert(`No se pudo marcar: ${e.message}`);
-      }
-    },
-  });
-  document.getElementById("serv-buscador-slot").appendChild(buscador);
-});
-
 // --- Usuarios (solo admin) ---
 Router.on("/usuarios", async () => {
   if (!requiereSesion()) return;

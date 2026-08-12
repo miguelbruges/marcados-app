@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import require_acceso_pastoral
 from app.models import Persona, Seguimiento, Usuario
-from app.schemas import SeguimientoCreate, SeguimientoOut
+from app.schemas import SeguimientoCreate, SeguimientoOut, SeguimientoRequiereAtencionOut
 
 router = APIRouter(prefix="/seguimiento", tags=["seguimiento"])
 
@@ -35,4 +35,14 @@ def crear_seguimiento(
 def historial_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(require_acceso_pastoral)):
     return db.scalars(
         select(Seguimiento).where(Seguimiento.persona_id == persona_id).order_by(Seguimiento.fecha.desc())
+    ).all()
+
+
+@router.get("/requieren-atencion", response_model=list[SeguimientoRequiereAtencionOut])
+def listar_requieren_atencion(db: Session = Depends(get_db), _=Depends(require_acceso_pastoral)):
+    """Vista entre personas de los registros marcados 'requiere atención' —
+    alimenta el centro de alertas del panel. Sigue siendo una nota humana,
+    nunca un cálculo automático (principio no negociable del proyecto)."""
+    return db.scalars(
+        select(Seguimiento).where(Seguimiento.requiere_atencion == True).order_by(Seguimiento.fecha.desc())  # noqa: E712
     ).all()

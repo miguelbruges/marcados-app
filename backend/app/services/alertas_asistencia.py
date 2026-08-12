@@ -20,11 +20,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Asistencia, Evento, Persona
+from app.models import Actividad, Asistencia, Evento, Persona
 
 
 @dataclass
@@ -35,37 +35,90 @@ class SemaforoAsistencia:
     nivel: str  # "sin_datos" | "verde" | "amarillo" | "rojo"
 
 
-def calcular_semaforo(db: Session, persona_id: int) -> SemaforoAsistencia:
-    desde = date.today() - timedelta(days=settings.alertas_ventana_dias)
-    registros = db.scalars(
-        select(Asistencia).join(Evento).where(Asistencia.persona_id == persona_id, Evento.fecha >= desde)
+def _nivel_por_fraccion(fraccion: float, umbral_verde: float, umbral_amarillo: float) -> str:
+    if fraccion >= umbral_verde:
+        return "verde"
+    if fraccion >= umbral_amarillo:
+        return "amarillo"
+    return "rojo"
+
+
+def _eventos_evaluables_ids(db: Session, desde: date) -> list[int]:
+    """Eventos que cuentan como 'oportunidad de asistencia' dentro de la
+    ventana — solo de actividades marcadas cuenta_para_semaforo=True (por
+    defecto, el encuentro semanal principal). Este conjunto es el MISMO
+    para todas las personas: el denominador del semáforo es "cuántas
+    reuniones hubo", no "cuántas veces esta persona quedó registrada" —
+    antes se calculaba así por error, y por eso una sola asistencia
+    aislada aparecía como 100% / verde (pedido del usuario, 2026-08-12)."""
+    return db.scalars(
+        select(Evento.id)
+        .join(Actividad, Actividad.id == Evento.actividad_id)
+        .where(Evento.fecha >= desde, Evento.activo == True, Actividad.cuenta_para_semaforo == True)  # noqa: E712
     ).all()
 
-    evaluables = len(registros)
-    asistidas = sum(1 for r in registros if r.presente)
 
-    if evaluables == 0:
-        return SemaforoAsistencia(asistidas, evaluables, None, "sin_datos")
+def calcular_semaforo(
+    db: Session,
+    persona_id: int,
+    ventana_dias: int | None = None,
+    umbral_verde: float | None = None,
+    umbral_amarillo: float | None = None,
+    minimo_eventos: int | None = None,
+) -> SemaforoAsistencia:
+    ventana_dias = settings.alertas_ventana_dias if ventana_dias is None else ventana_dias
+    umbral_verde = settings.alertas_umbral_verde if umbral_verde is None else umbral_verde
+    umbral_amarillo = settings.alertas_umbral_amarillo if umbral_amarillo is None else umbral_amarillo
+    minimo_eventos = settings.alertas_minimo_eventos if minimo_eventos is None else minimo_eventos
+    desde = date.today() - timedelta(days=ventana_dias)
 
+    evento_ids = _eventos_evaluables_ids(db, desde)
+    evaluables = len(evento_ids)
+    if evaluables < minimo_eventos:
+        return SemaforoAsistencia(0, evaluables, None, "sin_datos")
+
+    asistidas = (
+        db.scalar(
+            select(func.count())
+            .select_from(Asistencia)
+            .where(
+                Asistencia.persona_id == persona_id,
+                Asistencia.evento_id.in_(evento_ids),
+                Asistencia.presente == True,  # noqa: E712
+            )
+        )
+        or 0
+    )
     fraccion = asistidas / evaluables
-    if fraccion >= settings.alertas_umbral_verde:
-        nivel = "verde"
-    elif fraccion >= settings.alertas_umbral_amarillo:
-        nivel = "amarillo"
-    else:
-        nivel = "rojo"
+    nivel = _nivel_por_fraccion(fraccion, umbral_verde, umbral_amarillo)
     return SemaforoAsistencia(asistidas, evaluables, round(fraccion * 100, 1), nivel)
 
 
 def calcular_inasistencias_consecutivas(db: Session, persona_id: int) -> int:
     """Cuenta las inasistencias seguidas más recientes (se corta apenas
-    aparece una asistencia). No mira una ventana de tiempo: mira la racha."""
-    registros = db.scalars(
-        select(Asistencia).join(Evento).where(Asistencia.persona_id == persona_id).order_by(Evento.fecha.desc())
+    aparece una asistencia), mirando TODAS las reuniones contadas para el
+    semáforo sin límite de ventana — es una racha, no un corte de tiempo."""
+    eventos = db.scalars(
+        select(Evento.id)
+        .join(Actividad, Actividad.id == Evento.actividad_id)
+        .where(Evento.activo == True, Actividad.cuenta_para_semaforo == True)  # noqa: E712
+        .order_by(Evento.fecha.desc())
     ).all()
+    if not eventos:
+        return 0
+
+    asistidos = set(
+        db.scalars(
+            select(Asistencia.evento_id).where(
+                Asistencia.persona_id == persona_id,
+                Asistencia.evento_id.in_(eventos),
+                Asistencia.presente == True,  # noqa: E712
+            )
+        ).all()
+    )
     consecutivas = 0
-    for r in registros:
-        if r.presente:
+    for evento_id in eventos:
+        if evento_id in asistidos:
             break
         consecutivas += 1
     return consecutivas
@@ -76,43 +129,47 @@ def calcular_niveles_todas(
     ventana_dias: int | None = None,
     umbral_verde: float | None = None,
     umbral_amarillo: float | None = None,
+    minimo_eventos: int | None = None,
 ) -> dict[int, SemaforoAsistencia]:
     """Semáforo de TODAS las personas activas en una sola consulta — evitar
     correr calcular_semaforo() persona por persona (N+1) importa de verdad
     acá: con la base en Supabase, cada consulta es un viaje de red, y
-    120 viajes hacían que el panel tardara notoriamente en cargar."""
+    120 viajes hacían que el panel tardara notoriamente en cargar.
+
+    El denominador (evaluables) es el MISMO para todas: cuántas reuniones
+    contadas para el semáforo hubo en la ventana. Quien no asistió a
+    ninguna de esas reuniones da 0% ("rojo"), no "sin_datos" — "sin_datos"
+    ahora solo significa que todavía no hubo suficientes reuniones para
+    evaluar a nadie, no que a esta persona en particular le falte historial."""
     ventana_dias = settings.alertas_ventana_dias if ventana_dias is None else ventana_dias
     umbral_verde = settings.alertas_umbral_verde if umbral_verde is None else umbral_verde
     umbral_amarillo = settings.alertas_umbral_amarillo if umbral_amarillo is None else umbral_amarillo
+    minimo_eventos = settings.alertas_minimo_eventos if minimo_eventos is None else minimo_eventos
     desde = date.today() - timedelta(days=ventana_dias)
 
     ids_activos = db.scalars(select(Persona.id).where(Persona.activo == True)).all()  # noqa: E712
-    filas = db.execute(
-        select(Asistencia.persona_id, Asistencia.presente)
-        .join(Evento, Evento.id == Asistencia.evento_id)
-        .where(Evento.fecha >= desde, Asistencia.persona_id.in_(ids_activos))
-    ).all()
+    evento_ids = _eventos_evaluables_ids(db, desde)
+    evaluables = len(evento_ids)
 
-    contadores: dict[int, list[int]] = {}
-    for persona_id, presente in filas:
-        c = contadores.setdefault(persona_id, [0, 0])
-        c[0] += 1
-        if presente:
-            c[1] += 1
+    if evaluables < minimo_eventos:
+        return {pid: SemaforoAsistencia(0, evaluables, None, "sin_datos") for pid in ids_activos}
+
+    filas = db.execute(
+        select(Asistencia.persona_id, func.count())
+        .where(
+            Asistencia.evento_id.in_(evento_ids),
+            Asistencia.persona_id.in_(ids_activos),
+            Asistencia.presente == True,  # noqa: E712
+        )
+        .group_by(Asistencia.persona_id)
+    ).all()
+    contador = dict(filas)
 
     resultado: dict[int, SemaforoAsistencia] = {}
     for persona_id in ids_activos:
-        evaluables, asistidas = contadores.get(persona_id, [0, 0])
-        if evaluables == 0:
-            resultado[persona_id] = SemaforoAsistencia(asistidas, evaluables, None, "sin_datos")
-            continue
+        asistidas = contador.get(persona_id, 0)
         fraccion = asistidas / evaluables
-        if fraccion >= umbral_verde:
-            nivel = "verde"
-        elif fraccion >= umbral_amarillo:
-            nivel = "amarillo"
-        else:
-            nivel = "rojo"
+        nivel = _nivel_por_fraccion(fraccion, umbral_verde, umbral_amarillo)
         resultado[persona_id] = SemaforoAsistencia(asistidas, evaluables, round(fraccion * 100, 1), nivel)
     return resultado
 

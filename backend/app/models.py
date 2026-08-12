@@ -185,6 +185,12 @@ class Actividad(Base):
     nombre: Mapped[str] = mapped_column(String(120), unique=True)
     tipo: Mapped[str | None] = mapped_column(String(60), nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Si sus eventos cuentan como "oportunidad de asistencia" para el
+    # semáforo operativo — por defecto solo el encuentro semanal principal,
+    # para no penalizar a quien no participa de una actividad de horario o
+    # rol específico (p.ej. Escuela de Servidores). Editable por admin
+    # (PATCH /actividades/{id}), sección 15/21 del handoff.
+    cuenta_para_semaforo: Mapped[bool] = mapped_column(Boolean, default=True)
 
     eventos: Mapped[list["Evento"]] = relationship(back_populates="actividad")
 
@@ -242,6 +248,10 @@ class Seguimiento(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     persona: Mapped["Persona"] = relationship(back_populates="seguimientos")
+
+    @property
+    def persona_nombre(self) -> str:
+        return self.persona.nombre_completo
 
 
 class Bitacora(Base):

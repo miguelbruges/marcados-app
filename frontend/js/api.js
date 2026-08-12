@@ -82,6 +82,7 @@ const Api = (() => {
       request(`/personas/${personaId}/areas`, { method: "PUT", body: { area_ids: areaIds } }),
     historialSeguimiento: (personaId) => request(`/seguimiento/persona/${personaId}`),
     crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
+    seguimientosRequierenAtencion: () => request("/seguimiento/requieren-atencion"),
     catalogo: (tipo) => request(`/catalogos/${tipo}`),
 
     actividades: () => request("/actividades"),

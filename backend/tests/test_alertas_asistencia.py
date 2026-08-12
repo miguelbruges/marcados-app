@@ -95,19 +95,59 @@ def test_inasistencias_consecutivas_se_corta_en_la_primera_asistencia(db_session
 
 
 def test_resumen_niveles_cuenta_por_nivel(db_session):
+    # El denominador ahora es el mismo para todas: cuántas reuniones hubo.
+    # Quien no fue a ninguna da 0% (rojo), no "sin_datos" — antes 'rojo' no
+    # se veía nunca en la práctica porque el denominador viejo (cuántas
+    # veces ESTA persona quedó registrada) daba siempre 100%.
     actividad = _actividad(db_session)
     verde = _crear_persona(db_session, "MAR-000001")
     rojo = _crear_persona(db_session, "MAR-000002")
-    sin_datos = _crear_persona(db_session, "MAR-000003")
     db_session.flush()
 
-    for dias, (persona, presente) in enumerate([(verde, True), (rojo, False)], start=1):
-        evento = _crear_evento(db_session, dias, actividad)
-        db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=presente))
+    eventos = [_crear_evento(db_session, dias, actividad) for dias in (1, 8, 15, 22)]
+    for evento in eventos:
+        db_session.add(Asistencia(persona_id=verde.id, evento_id=evento.id, presente=True))
     db_session.commit()
 
     resumen = resumen_niveles(db_session)
-    assert resumen == {"verde": 1, "amarillo": 0, "rojo": 1, "sin_datos": 1}
+    assert resumen == {"verde": 1, "amarillo": 0, "rojo": 1, "sin_datos": 0}
+
+
+def test_resumen_niveles_sin_datos_si_no_alcanzan_las_reuniones_minimas(db_session):
+    # Antes: una sola asistencia daba 100% / verde, sin que eso significara
+    # nada confiable (justo el caso que reportó el usuario). Ahora, con
+    # menos reuniones que el mínimo configurado (2 por defecto), no se
+    # asigna color todavía.
+    actividad = _actividad(db_session)
+    persona = _crear_persona(db_session)
+    evento = _crear_evento(db_session, 1, actividad)
+    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
+    db_session.commit()
+
+    resumen = resumen_niveles(db_session)
+    assert resumen == {"verde": 0, "amarillo": 0, "rojo": 0, "sin_datos": 1}
+
+
+def test_actividad_que_no_cuenta_para_semaforo_no_afecta_el_calculo(db_session):
+    from app.models import Actividad as ActividadModel
+
+    actividad_cuenta = _actividad(db_session)
+    actividad_no_cuenta = ActividadModel(nombre="Escuela de Servidores", cuenta_para_semaforo=False)
+    db_session.add(actividad_no_cuenta)
+    db_session.flush()
+
+    persona = _crear_persona(db_session)
+    evento_bueno_1 = _crear_evento(db_session, 1, actividad_cuenta)
+    evento_bueno_2 = _crear_evento(db_session, 8, actividad_cuenta)
+    evento_ajeno = _crear_evento(db_session, 2, actividad_no_cuenta)  # nunca asistió a este
+    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento_bueno_1.id, presente=True))
+    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento_bueno_2.id, presente=True))
+    db_session.commit()
+
+    resultado = calcular_semaforo(db_session, persona.id)
+    # Si el evento_ajeno contara, serían 2/3 (67%, amarillo); al no contar, es 2/2 (100%, verde).
+    assert resultado.reuniones_evaluables_ventana == 2
+    assert resultado.nivel == "verde"
 
 
 def test_endpoint_alertas_persona(client, auth_headers, db_session):
@@ -142,28 +182,29 @@ def test_personas_por_nivel_devuelve_a_quien_corresponde(db_session):
     rojo = _crear_persona(db_session, "MAR-000002")
     db_session.flush()
 
-    for dias, (persona, presente) in enumerate([(verde, True), (rojo, False)], start=1):
-        evento = _crear_evento(db_session, dias, actividad)
-        db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=presente))
+    eventos = [_crear_evento(db_session, dias, actividad) for dias in (1, 8)]
+    for evento in eventos:
+        db_session.add(Asistencia(persona_id=verde.id, evento_id=evento.id, presente=True))
     db_session.commit()
 
     verdes = personas_por_nivel(db_session, "verde")
     assert [p.id_unico for p in verdes] == ["MAR-000001"]
 
-    sin_datos = personas_por_nivel(db_session, "sin_datos")
-    assert sin_datos == []  # nadie más existe sin registros
+    rojos = personas_por_nivel(db_session, "rojo")
+    assert [p.id_unico for p in rojos] == ["MAR-000002"]
 
 
 def test_resumen_niveles_respeta_ventana_configurable(db_session):
     persona = _crear_persona(db_session)
     actividad = _actividad(db_session)
-    evento = _crear_evento(db_session, 45, actividad)  # fuera de los 30 dias por defecto
-    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
+    eventos = [_crear_evento(db_session, dias, actividad) for dias in (45, 50)]  # fuera de los 30 dias por defecto
+    for evento in eventos:
+        db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
     db_session.commit()
 
-    # con la ventana por defecto (30 dias) no se ve
+    # con la ventana por defecto (30 dias) no se ve ninguna reunion
     assert resumen_niveles(db_session)["sin_datos"] == 1
-    # con una ventana mas amplia, si
+    # con una ventana mas amplia, alcanzan las 2 reuniones minimas
     resumen_60 = resumen_niveles(db_session, ventana_dias=60)
     assert resumen_60["verde"] == 1
     assert resumen_60["sin_datos"] == 0
@@ -173,8 +214,9 @@ def test_endpoint_dashboard_alertas_detalle(client, auth_headers, db_session):
     actividad = _actividad(db_session)
     verde = _crear_persona(db_session, "MAR-000001")
     db_session.flush()
-    evento = _crear_evento(db_session, 1, actividad)
-    db_session.add(Asistencia(persona_id=verde.id, evento_id=evento.id, presente=True))
+    eventos = [_crear_evento(db_session, dias, actividad) for dias in (1, 2)]
+    for evento in eventos:
+        db_session.add(Asistencia(persona_id=verde.id, evento_id=evento.id, presente=True))
     db_session.commit()
 
     resp = client.get("/dashboard/alertas-detalle", params={"nivel": "verde"}, headers=auth_headers)
@@ -185,8 +227,9 @@ def test_endpoint_dashboard_alertas_detalle(client, auth_headers, db_session):
 def test_endpoint_dashboard_alertas_resumen_con_ventana_explicita(client, auth_headers, db_session):
     persona = _crear_persona(db_session)
     actividad = _actividad(db_session)
-    evento = _crear_evento(db_session, 45, actividad)
-    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
+    eventos = [_crear_evento(db_session, dias, actividad) for dias in (45, 50)]
+    for evento in eventos:
+        db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
     db_session.commit()
 
     resp = client.get("/dashboard/alertas-resumen", params={"ventana_dias": 60}, headers=auth_headers)

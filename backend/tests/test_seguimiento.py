@@ -47,6 +47,31 @@ def test_seguimiento_respeta_fecha_explicita(client, db_session):
     assert resp.json()["fecha"] == "2026-01-15"
 
 
+def test_listar_requieren_atencion_solo_trae_los_marcados(client, db_session):
+    headers = _headers_rol(client, db_session, RolUsuario.LIDER, "lider7@marcadosapp.dev")
+    persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers).json()["id"]
+
+    client.post("/seguimiento", json={"persona_id": persona_id, "notas": "normal"}, headers=headers)
+    client.post(
+        "/seguimiento",
+        json={"persona_id": persona_id, "notas": "urgente", "requiere_atencion": True},
+        headers=headers,
+    )
+
+    resp = client.get("/seguimiento/requieren-atencion", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["notas"] == "urgente"
+    assert body[0]["persona_nombre"] == "Ana Perez"
+
+
+def test_consolidacion_no_ve_requieren_atencion(client, db_session):
+    headers = _headers_rol(client, db_session, RolUsuario.CONSOLIDACION, "consolidacion2@marcadosapp.dev")
+    resp = client.get("/seguimiento/requieren-atencion", headers=headers)
+    assert resp.status_code == 403
+
+
 def test_encargado_puede_ver_historial_seguimiento(client, db_session):
     headers_lider = _headers_rol(client, db_session, RolUsuario.LIDER, "lider2@marcadosapp.dev")
     persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers_lider).json()["id"]

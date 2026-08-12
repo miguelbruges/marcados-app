@@ -95,8 +95,24 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 .link-btn { padding: 0.35rem 0.8rem; font-size: 0.82rem; font-weight: 600; }
-.btn-icono { width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center; }
+.btn-icono { width: 2.2rem; height: 2.2rem; display: flex; align-items: center; justify-content: center; position: relative; }
 .link-btn:hover, .btn-icono:hover { background: rgba(255, 255, 255, 0.2); }
+
+.badge-notif {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--naranja-500);
+  color: var(--morado-950);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1.15rem;
+  text-align: center;
+}
 
 .app {
   flex: 1;
@@ -347,6 +363,74 @@ button.secundario {
   text-decoration: none;
   padding-top: 0.35rem;
 }
+
+/* --- Buscador general (Panel / Jóvenes) --- */
+.buscador-general { margin-bottom: 1.1rem; }
+.buscador-general .buscador-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  font-size: 1rem;
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+.buscador-general .candidatos { margin-top: 0.5rem; }
+
+/* --- Accesos rápidos (Jóvenes): antes eran enlaces de texto sueltos --- */
+.accesos-rapidos { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.1rem; }
+.acceso-rapido {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--morado-100);
+  color: var(--morado-700);
+  border-radius: 999px;
+  padding: 0.5rem 0.95rem 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.acceso-rapido-ico {
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--superficie);
+  color: var(--acento);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.acceso-rapido-ico svg { width: 1rem; height: 1rem; }
+
+/* --- Estado de servicio en la ficha: botón directo, sin pasar por "Editar" --- */
+.servicio-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  box-shadow: var(--sombra);
+  padding: 0.9rem 1rem;
+  margin: 0.9rem 0;
+}
+.servicio-card-texto strong { display: block; font-size: 0.92rem; }
+.servicio-card-texto small { color: var(--texto-suave); font-size: 0.78rem; }
+.btn-servidor {
+  flex: none;
+  border: none;
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+}
+.btn-servidor.marcar { background: var(--verde); }
+.btn-servidor.quitar { background: var(--rojo); }
 
 /* --- Semáforo de asistencia --- */
 .semaforo { margin-top: 1.6rem; }

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     alertas_ventana_dias: int = 30
     alertas_umbral_verde: float = 0.85
     alertas_umbral_amarillo: float = 0.50
+    # Con menos reuniones "contadas para el semáforo" que esto dentro de la
+    # ventana, no se asigna color — un solo dato no es un patrón (pedido del
+    # usuario, 2026-08-12: con 1 sola asistencia el sistema mostraba verde
+    # sin que eso significara nada confiable).
+    alertas_minimo_eventos: int = 2
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

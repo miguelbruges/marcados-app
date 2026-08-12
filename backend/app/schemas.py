@@ -199,17 +199,20 @@ class ActividadOut(BaseModel):
     nombre: str
     tipo: str | None = None
     activo: bool
+    cuenta_para_semaforo: bool
 
 
 class ActividadCreate(BaseModel):
     nombre: str
     tipo: str | None = None
+    cuenta_para_semaforo: bool = True
 
 
 class ActividadUpdate(BaseModel):
     nombre: str | None = None
     tipo: str | None = None
     activo: bool | None = None
+    cuenta_para_semaforo: bool | None = None
 
 
 # --- Eventos / Asistencia ---
@@ -291,3 +294,16 @@ class SeguimientoOut(SeguimientoCreate):
     id: int
     fecha: date
     created_at: datetime
+
+
+class SeguimientoRequiereAtencionOut(BaseModel):
+    """Vista agregada entre personas — alimenta el centro de alertas del
+    panel. Sigue siendo lo que un humano escribió a mano; no es un cálculo."""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    persona_id: int
+    persona_nombre: str
+    fecha: date
+    tipo: str | None
+    notas: str
