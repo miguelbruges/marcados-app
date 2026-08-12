@@ -1336,6 +1336,21 @@ Router.on("/asistencia", async () => {
   document.getElementById("asis-iniciar").addEventListener("click", iniciarRegistroAsistencia);
 });
 
+// Detección de 2da visita (Batch C, pedido del usuario): la primera vez
+// que alguien asiste su ficha suele estar casi vacía — recién es evidente
+// que se va a quedar en el grupo cuando vuelve una segunda vez. Solo
+// informa y enlaza a la ficha; nunca decide nada por su cuenta.
+function avisarSiSegundaVisita(registro) {
+  if (registro.total_asistencias_persona !== 2) return;
+  const slot = document.getElementById("avisos-2da-visita");
+  if (!slot) return;
+  slot.insertAdjacentHTML(
+    "afterbegin",
+    `<div class="aviso-info">Es la 2da vez que asiste <strong>${registro.persona_nombre}</strong> —
+      <a href="#/personas/ver?id=${registro.persona_id}">completar su ficha</a></div>`
+  );
+}
+
 function filaAsistencia(registro) {
   const li = document.createElement("li");
   li.innerHTML = `<span>✓ ${registro.persona_nombre}</span> <button type="button" class="quitar-asis" aria-label="Quitar a ${registro.persona_nombre}">✕</button>`;
@@ -1373,6 +1388,7 @@ async function iniciarRegistroAsistencia() {
   body.innerHTML = `
     <h2>Buscar joven</h2>
     <div id="buscador-slot"></div>
+    <div id="avisos-2da-visita"></div>
     <h2>Asistieron (<span id="conteo-asistieron">0</span>)</h2>
     <ul class="lista-asistieron" id="lista-asistieron"></ul>
     <button class="secundario" id="asis-finalizar" type="button">Finalizar registro</button>
@@ -1409,6 +1425,7 @@ async function iniciarRegistroAsistencia() {
         ul.prepend(filaAsistencia(registro));
         document.getElementById("conteo-asistieron").textContent =
           Number(document.getElementById("conteo-asistieron").textContent) + 1;
+        avisarSiSegundaVisita(registro);
       } catch (e) {
         alert(`No se pudo registrar: ${e.message}`);
       }
@@ -1544,7 +1561,10 @@ function renderFilaImportada(fila, idx) {
 // --- Agregar joven ---
 Router.on("/personas/nueva", async () => {
   if (!requiereSesion()) return;
-  const generos = await Api.catalogo("genero").catch(() => []);
+  const [generos, actividades] = await Promise.all([
+    Api.catalogo("genero").catch(() => []),
+    Api.actividades().catch(() => []),
+  ]);
   const opcionesGenero = generos.map((c) => `<option value="${c.valor}">${c.valor}</option>`).join("");
   $app.innerHTML = `
     <h1>Agregar joven</h1>
@@ -1604,12 +1624,46 @@ Router.on("/personas/nueva", async () => {
     errorBox.textContent = "";
     try {
       const persona = await Api.crearPersona(data);
-      document.getElementById("persona-ok").innerHTML =
-        `<div class="card">Guardado: <strong>${persona.nombres} ${persona.apellidos}</strong> (${persona.id_unico})<br>
-         <span class="hint">Fecha de ingreso registrada automáticamente: ${persona.fecha_ingreso}</span></div>`;
+      document.getElementById("persona-ok").innerHTML = `
+        <div class="card">Guardado: <strong>${persona.nombres} ${persona.apellidos}</strong> (${persona.id_unico})<br>
+         <span class="hint">Fecha de ingreso registrada automáticamente: ${persona.fecha_ingreso}</span></div>
+        ${
+          actividades.length
+            ? `<div class="card">
+                 <strong>¿A qué evento asistió?</strong>
+                 <p class="hint">Registralo/a de una vez en la asistencia de hoy — queda guardado a qué evento asistió por primera vez.</p>
+                 <label>Actividad</label>
+                 <select id="nueva-persona-actividad">${opcionesActividades(actividades)}</select>
+                 <div id="nueva-persona-otro-slot"></div>
+                 <label>Fecha</label>
+                 <input type="date" id="nueva-persona-fecha" value="${new Date().toISOString().slice(0, 10)}">
+                 <button class="primary" type="button" id="btn-anadir-asistencia">Añadir a asistencia</button>
+                 <div id="anadir-asistencia-resultado"></div>
+               </div>`
+            : ""
+        }
+      `;
       form.reset();
       invitadoPorId = null;
       document.getElementById("invitador-elegido").textContent = "";
+
+      if (actividades.length) {
+        wireOtroManual("nueva-persona-actividad", "nueva-persona-otro-slot");
+        document.getElementById("btn-anadir-asistencia").addEventListener("click", async () => {
+          const actividadId = Number(document.getElementById("nueva-persona-actividad").value);
+          const fecha = document.getElementById("nueva-persona-fecha").value;
+          const nombreEvento = nombreEventoElegido("nueva-persona-actividad");
+          const resultado = document.getElementById("anadir-asistencia-resultado");
+          resultado.innerHTML = `<p class="hint">Guardando...</p>`;
+          try {
+            const evt = await Api.crearOReusarEvento({ actividad_id: actividadId, nombre: `${nombreEvento} ${fecha}`, fecha });
+            await Api.registrarAsistencia({ persona_id: persona.id, evento_id: evt.id, presente: true });
+            resultado.innerHTML = `<div class="card">Listo — quedó registrada/o en "${evt.nombre}".</div>`;
+          } catch (err) {
+            resultado.innerHTML = `<div class="error">${err.message}</div>`;
+          }
+        });
+      }
     } catch (e2) {
       errorBox.textContent = `No se pudo guardar: ${e2.message}`;
     }

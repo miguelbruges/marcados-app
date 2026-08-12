@@ -46,3 +46,16 @@ def test_registrar_asistencia_no_duplica_para_misma_persona_evento(client, auth_
 def test_ver_asistencia_de_evento_inexistente_da_404(client, auth_headers):
     resp = client.get("/eventos/9999/asistencia", headers=auth_headers)
     assert resp.status_code == 404
+
+
+def test_asistencia_informa_el_total_de_veces_que_asistio_la_persona(client, auth_headers, db_session):
+    actividad = _crear_actividad(db_session)
+    persona = client.post("/personas", json={"nombres": "Sofia", "apellidos": "Hernandez"}, headers=auth_headers).json()
+
+    evento1 = client.post("/eventos", json={"actividad_id": actividad.id, "nombre": "e1", "fecha": "2026-08-01"}, headers=auth_headers).json()
+    r1 = client.post("/asistencia", json={"persona_id": persona["id"], "evento_id": evento1["id"]}, headers=auth_headers)
+    assert r1.json()["total_asistencias_persona"] == 1
+
+    evento2 = client.post("/eventos", json={"actividad_id": actividad.id, "nombre": "e2", "fecha": "2026-08-08"}, headers=auth_headers).json()
+    r2 = client.post("/asistencia", json={"persona_id": persona["id"], "evento_id": evento2["id"]}, headers=auth_headers)
+    assert r2.json()["total_asistencias_persona"] == 2

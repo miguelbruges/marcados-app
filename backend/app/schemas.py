@@ -270,6 +270,7 @@ class AsistenciaOut(BaseModel):
     evento_id: int
     presente: bool
     registrado_en: datetime
+    total_asistencias_persona: int
 
 
 # --- Catálogos / Áreas ---

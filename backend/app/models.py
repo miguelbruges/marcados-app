@@ -233,6 +233,15 @@ class Asistencia(Base):
     def persona_nombre(self) -> str:
         return self.persona.nombre_completo
 
+    @property
+    def total_asistencias_persona(self) -> int:
+        """Cuántas veces en total quedó registrada esta persona (incluyendo
+        este registro) — alimenta la detección de "2da visita" en el
+        frontend (sección Batch C, pedido del usuario 2026-08-11/12): en la
+        segunda asistencia registrada de alguien, se sugiere completar su
+        ficha. Es un conteo, nunca una conclusión sobre la persona."""
+        return len(self.persona.asistencias)
+
 
 class Seguimiento(Base):
     """Registro de seguimiento pastoral. Es un log humano, no una conclusión automática."""
