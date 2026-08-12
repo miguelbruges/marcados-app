@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.database import get_db
@@ -29,13 +29,26 @@ from app.services.invitaciones import calcular_periodo, ranking_invitaciones
 router = APIRouter(prefix="/personas", tags=["personas"])
 
 
+def _con_relaciones_precargadas(q):
+    """PersonaOut serializa invitado_por_nombre y areas_servicio, ambas
+    propiedades respaldadas por relaciones — sin precargarlas, listar N
+    personas dispara N (o más) consultas extra de carga perezosa, cada una
+    un viaje de red aparte contra el pooler remoto. Con 120 personas reales
+    eso es la diferencia entre 1 consulta y 100+ (pedido del usuario,
+    2026-08-12: "no quiero que demoren")."""
+    return q.options(
+        selectinload(Persona.invitado_por),
+        selectinload(Persona.areas).selectinload(PersonaArea.area),
+    )
+
+
 @router.get("", response_model=list[PersonaOut])
 def listar_personas(
     activo: bool | None = Query(default=True),
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
-    q = select(Persona)
+    q = _con_relaciones_precargadas(select(Persona))
     if activo is not None:
         q = q.where(Persona.activo == activo)
     return db.scalars(q.order_by(Persona.apellidos, Persona.nombres)).all()
@@ -81,7 +94,7 @@ def invitaciones_resumen(
 
 @router.get("/{persona_id}", response_model=PersonaOut)
 def obtener_persona(persona_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    persona = db.get(Persona, persona_id)
+    persona = db.scalar(_con_relaciones_precargadas(select(Persona)).where(Persona.id == persona_id))
     if not persona:
         raise HTTPException(status_code=404, detail="Persona no encontrada")
     return persona

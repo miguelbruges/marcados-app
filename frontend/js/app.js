@@ -121,37 +121,43 @@ Router.on("/panel", async () => {
   });
   document.getElementById("buscador-panel-slot").appendChild(buscador);
 
-  try {
-    const [resumen, activosCrudo, inactivosCrudo, bautizados30d] = await Promise.all([
-      Api.dashboardResumen(),
-      Api.personas(true),
-      Api.personas(false),
-      Api.asistieron30Dias(),
-    ]);
-    if (!Router.vigente(miToken)) return;
-    // PersonaOut no trae nombre_completo (solo nombres/apellidos por separado) —
-    // se completa acá para que las listas de las tarjetas puedan mostrar un nombre.
-    const conNombreCompleto = (p) => ({ ...p, nombre_completo: `${p.nombres} ${p.apellidos}` });
-    const activos = activosCrudo.map(conNombreCompleto);
-    const inactivos = inactivosCrudo.map(conNombreCompleto);
-    const todas = activos.concat(inactivos);
-    pintarKpis([
-      { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo"), filtro: null },
-      { label: "Activos", valor: resumen.activos, personas: activos, etiqueta: () => "activo", filtro: "activos" },
-      { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados" },
-      { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores" },
-      { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
-    ]);
-  } catch (e) {
-    if (!Router.vigente(miToken)) return;
-    document.getElementById("grid-kpi").innerHTML = `<div class="error">${e.message}</div>`;
+  async function cargarKpis() {
+    try {
+      const [resumen, activosCrudo, inactivosCrudo, bautizados30d] = await Promise.all([
+        Api.dashboardResumen(),
+        Api.personas(true),
+        Api.personas(false),
+        Api.asistieron30Dias(),
+      ]);
+      if (!Router.vigente(miToken)) return;
+      // PersonaOut no trae nombre_completo (solo nombres/apellidos por separado) —
+      // se completa acá para que las listas de las tarjetas puedan mostrar un nombre.
+      const conNombreCompleto = (p) => ({ ...p, nombre_completo: `${p.nombres} ${p.apellidos}` });
+      const activos = activosCrudo.map(conNombreCompleto);
+      const inactivos = inactivosCrudo.map(conNombreCompleto);
+      const todas = activos.concat(inactivos);
+      pintarKpis([
+        { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo"), filtro: null },
+        { label: "Activos", valor: resumen.activos, personas: activos, etiqueta: () => "activo", filtro: "activos" },
+        { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados" },
+        { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores" },
+        { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
+      ]);
+    } catch (e) {
+      if (!Router.vigente(miToken)) return;
+      document.getElementById("grid-kpi").innerHTML = `<div class="error">${e.message}</div>`;
+    }
   }
 
+  // Las tres cargas del panel no dependen entre sí — antes se esperaban en
+  // cadena (KPIs, después semáforo, después el contador de alertas), lo
+  // que sumaba sus tiempos de red uno tras otro. Ahora arrancan todas
+  // juntas (pedido del usuario, 2026-08-12: "no quiero que demoren").
   if (tieneAccesoPastoral()) {
-    await cargarSemaforo(30);
-    actualizarBadgeAlertas();
+    await Promise.all([cargarKpis(), cargarSemaforo(30), actualizarBadgeAlertas()]);
   } else {
     $btnAlertas.hidden = true;
+    await cargarKpis();
   }
 });
 
@@ -851,13 +857,21 @@ const CAMPOS_EDITABLES_FICHA = [
 // Trae una sola vez cada catálogo que usan los desplegables de la ficha
 // (sección 15 del handoff: los catálogos reales del Excel alimentan los
 // desplegables, no listas escritas a mano).
+// Los catálogos (género, estado, EPS...) son datos de referencia casi
+// estáticos — pedirlos de nuevo cada vez que se abre una ficha suma viajes
+// de red innecesarios cuando alguien revisa varias fichas seguidas. Se
+// cachean en memoria una vez por sesión (pedido del usuario, 2026-08-12).
+let _catalogosFichaCache = null;
+
 async function cargarCatalogosFicha() {
+  if (_catalogosFichaCache) return _catalogosFichaCache;
   const tipos = [...new Set(
     CAMPOS_EDITABLES_FICHA.filter(([, , tipo]) => tipo.startsWith("catalogo:")).map(([, , tipo]) => tipo.split(":")[1])
   )];
   const resultados = await Promise.all(tipos.map((t) => Api.catalogo(t).catch(() => [])));
   const mapa = {};
   tipos.forEach((t, i) => (mapa[t] = resultados[i]));
+  _catalogosFichaCache = mapa;
   return mapa;
 }
 
