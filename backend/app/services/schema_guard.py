@@ -45,6 +45,39 @@ def asegurar_esquema_minimo(engine: Engine) -> None:
                     text(f"ALTER TABLE personas ADD COLUMN activo_ministerio BOOLEAN NOT NULL DEFAULT {valor_default}")
                 )
 
+        # Reinicio de servidor/bautizado a False para todas las personas
+        # (pedido del usuario, 2026-08-13 — ver migración 7b8b896aedf6). Se
+        # confirmó con el usuario antes de aplicarlo. Igual que con
+        # cuenta_para_semaforo, no hay garantía de que Alembic haya llegado
+        # a correr en este despliegue, así que se auto-aplica acá.
+        # `alembic_version` es la marca de que ya corrió — sin ella, un
+        # reinicio del servidor (Render duerme y despierta seguido en la
+        # capa gratuita) volvería a poner todo en False una y otra vez,
+        # borrando cualquier corrección manual que el liderazgo ya haya
+        # hecho desde la ficha.
+        REVISION_RESET_SERVIDOR_BAUTIZADO = "7b8b896aedf6"
+        version_actual = None
+        if "alembic_version" in insp.get_table_names():
+            with engine.begin() as conn:
+                version_actual = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        if version_actual != REVISION_RESET_SERVIDOR_BAUTIZADO:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("UPDATE personas SET servidor = :f, bautizado = :f"),
+                    {"f": False if es_postgres else 0},
+                )
+                if "alembic_version" not in insp.get_table_names():
+                    conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+                    conn.execute(
+                        text("INSERT INTO alembic_version (version_num) VALUES (:v)"),
+                        {"v": REVISION_RESET_SERVIDOR_BAUTIZADO},
+                    )
+                else:
+                    conn.execute(
+                        text("UPDATE alembic_version SET version_num = :v"),
+                        {"v": REVISION_RESET_SERVIDOR_BAUTIZADO},
+                    )
+
     if "plantilla_excel" not in insp.get_table_names():
         with engine.begin() as conn:
             if es_postgres:

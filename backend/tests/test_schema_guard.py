@@ -82,3 +82,81 @@ def test_no_crea_telegram_sesiones_si_no_existe_la_tabla_usuarios(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'sin_usuarios.db'}")
     asegurar_esquema_minimo(engine)  # esquema completamente vacío: no debe explotar
     assert "telegram_sesiones" not in inspect(engine).get_table_names()
+
+
+def _crear_tabla_personas(engine, servidor=1, bautizado=1):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE personas (id INTEGER PRIMARY KEY, nombres TEXT, servidor BOOLEAN, bautizado BOOLEAN)"
+            )
+        )
+        conn.execute(
+            text("INSERT INTO personas (nombres, servidor, bautizado) VALUES ('Ana', :s, :b)"),
+            {"s": servidor, "b": bautizado},
+        )
+
+
+def test_agrega_activo_ministerio_si_falta_en_personas(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'sin_activo_ministerio.db'}")
+    _crear_tabla_personas(engine)
+
+    asegurar_esquema_minimo(engine)
+
+    assert "activo_ministerio" in {c["name"] for c in inspect(engine).get_columns("personas")}
+
+
+def test_reinicia_servidor_y_bautizado_a_false_la_primera_vez(tmp_path):
+    """Pedido del usuario, 2026-08-13: reiniciar servidor/bautizado a False
+    para reconfirmar uno por uno — ver migración 7b8b896aedf6. No hay
+    garantía de que Alembic haya corrido en el despliegue (mismo problema
+    documentado arriba con cuenta_para_semaforo), así que esto se
+    autoaplica acá."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'reinicio.db'}")
+    _crear_tabla_personas(engine, servidor=1, bautizado=1)
+
+    asegurar_esquema_minimo(engine)
+
+    with engine.connect() as conn:
+        fila = conn.execute(text("SELECT servidor, bautizado FROM personas WHERE nombres='Ana'")).one()
+    assert fila.servidor == 0
+    assert fila.bautizado == 0
+
+    with engine.connect() as conn:
+        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    assert version == "7b8b896aedf6"
+
+
+def test_no_repite_el_reinicio_en_una_segunda_pasada(tmp_path):
+    """Crítico: Render (capa gratuita) reinicia el proceso seguido. Si esto
+    se repitiera en cada arranque, borraría cualquier corrección manual que
+    el liderazgo ya haya hecho desde la ficha después del primer reinicio."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'no_repetir.db'}")
+    _crear_tabla_personas(engine, servidor=1, bautizado=1)
+
+    asegurar_esquema_minimo(engine)  # primera pasada: reinicia y marca alembic_version
+
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE personas SET servidor = 1 WHERE nombres='Ana'"))  # corrección manual simulada
+
+    asegurar_esquema_minimo(engine)  # segunda pasada: no debe tocar nada de nuevo
+
+    with engine.connect() as conn:
+        valor = conn.execute(text("SELECT servidor FROM personas WHERE nombres='Ana'")).scalar()
+    assert valor == 1
+
+
+def test_no_reinicia_si_alembic_version_ya_esta_al_dia(tmp_path):
+    """Si Alembic sí llegó a correr la migración de verdad, alembic_version
+    ya está en la revisión final — no hay que repetir el reinicio."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'ya_al_dia.db'}")
+    _crear_tabla_personas(engine, servidor=1, bautizado=1)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+        conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('7b8b896aedf6')"))
+
+    asegurar_esquema_minimo(engine)
+
+    with engine.connect() as conn:
+        valor = conn.execute(text("SELECT servidor FROM personas WHERE nombres='Ana'")).scalar()
+    assert valor == 1

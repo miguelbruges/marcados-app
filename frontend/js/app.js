@@ -190,9 +190,9 @@ Router.on("/panel", async () => {
       const todas = activos.concat(inactivos);
       pintarKpis([
         { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo"), filtro: null },
-        { label: "Activos", valor: resumen.activos, personas: todas.filter((p) => p.activo_ministerio), etiqueta: () => "activo", vacioTexto: "Nadie confirmado como activo todavía — se marca desde la ficha de cada joven.", filtro: "activos" },
-        { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados" },
-        { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores" },
+        { label: "Activos", valor: resumen.activos, personas: todas.filter((p) => p.activo_ministerio), etiqueta: () => "activo", vacioTexto: "Nadie confirmado como activo todavía — se marca desde la ficha de cada joven.", filtro: "activos", resaltar: "activo-ministerio-slot" },
+        { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados", resaltar: "bautizado-slot" },
+        { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores", resaltar: "servicio-slot" },
         { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
       ]);
     } catch (e) {
@@ -359,10 +359,14 @@ Router.on("/alertas", async () => {
 // personas detrás del número — antes solo se veía el total.
 const KPI_PREVIA_LIMITE = 6;
 
-function listaKpiHtml(personas, etiqueta, sinResultadosTexto) {
+function listaKpiHtml(personas, etiqueta, sinResultadosTexto, resaltar) {
   if (!personas.length) return `<p class="kpi-vacio">${sinResultadosTexto}</p>`;
+  const sufijoResaltar = resaltar ? `&resaltar=${resaltar}` : "";
   return `<ul class="kpi-lista">${personas
-    .map((p) => `<li>${p.nombre_completo}<span class="badge ALTA">${etiqueta(p)}</span></li>`)
+    .map(
+      (p) =>
+        `<li><a href="#/personas/ver?id=${p.id}${sufijoResaltar}">${p.nombre_completo}<span class="badge ALTA">${etiqueta(p)}</span></a></li>`
+    )
     .join("")}</ul>`;
 }
 
@@ -378,9 +382,9 @@ function pintarKpis(items) {
     const hrefVerTodos = item.filtro ? `#/personas?filtro=${item.filtro}` : "#/personas";
     const vacioTexto = item.vacioTexto || "Nadie en esta categoría todavía.";
     const buscadorHtml = esLarga
-      ? `<input type="search" class="kpi-buscador" placeholder="Buscar en esta lista..." autocomplete="off">`
+      ? `<input type="search" class="kpi-buscador" placeholder="Buscar..." autocomplete="off">`
       : "";
-    const listaHtml = listaKpiHtml(item.personas.slice(0, KPI_PREVIA_LIMITE), item.etiqueta, vacioTexto);
+    const listaHtml = listaKpiHtml(item.personas.slice(0, KPI_PREVIA_LIMITE), item.etiqueta, vacioTexto, item.resaltar);
     const linkVerTodosHtml = esLarga
       ? `<a class="kpi-vertodos" href="${hrefVerTodos}">Ver los ${item.personas.length} completos →</a>`
       : "";
@@ -412,12 +416,12 @@ function pintarKpis(items) {
       $buscador.addEventListener("input", (e) => {
         const q = normalizarTexto(e.target.value.trim());
         if (!q) {
-          $listaSlot.innerHTML = listaKpiHtml(item.personas.slice(0, KPI_PREVIA_LIMITE), item.etiqueta, vacioTexto);
+          $listaSlot.innerHTML = listaKpiHtml(item.personas.slice(0, KPI_PREVIA_LIMITE), item.etiqueta, vacioTexto, item.resaltar);
           $verTodosSlot.innerHTML = linkVerTodosHtml;
           return;
         }
         const encontradas = item.personas.filter((p) => normalizarTexto(p.nombre_completo).includes(q));
-        $listaSlot.innerHTML = listaKpiHtml(encontradas, item.etiqueta, `Nadie coincide con "${e.target.value.trim()}".`);
+        $listaSlot.innerHTML = listaKpiHtml(encontradas, item.etiqueta, `Nadie coincide con "${e.target.value.trim()}".`, item.resaltar);
         $verTodosSlot.innerHTML = "";
       });
     }
@@ -984,15 +988,59 @@ Router.on("/personas/ver", async () => {
     ]);
     if (!Router.vigente(miToken)) return;
     renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles);
+    resaltarSeccionFicha(Router.query().get("resaltar"));
   } catch (e) {
     if (!Router.vigente(miToken)) return;
     $app.innerHTML = `<div class="error">${e.message}</div>`;
   }
 });
 
+// Al llegar desde una tarjeta del Panel (ej. "Sirviendo"), señala en la
+// ficha justo la parte que corresponde a ese desglose en vez de dejar que
+// el usuario la busque a mano (pedido del usuario, 2026-08-13).
+function resaltarSeccionFicha(idSeccion) {
+  if (!idSeccion) return;
+  const el = document.getElementById(idSeccion);
+  if (!el) return;
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("resaltado");
+    setTimeout(() => el.classList.remove("resaltado"), 2200);
+  });
+}
+
 // Tipos fijos de contacto pastoral — no es un catálogo administrable desde
 // Excel, es una lista corta y estable (pedido del usuario, 2026-08-12).
 const TIPOS_SEGUIMIENTO = ["Llamada", "Visita", "Mensaje", "Reunión personal", "Oración", "Otro"];
+
+// --- Bautizado: mismo patrón de toggle que servidor/activo_ministerio.
+// Hacía falta un control acá porque antes bautizado solo se podía fijar
+// al crear la persona — sin esto no había forma de reconfirmarlo desde la
+// ficha después del reinicio a False (pedido del usuario, 2026-08-13). ---
+function pintarBautizado(persona) {
+  const slot = document.getElementById("bautizado-slot");
+  if (!slot) return;
+  const texto = persona.bautizado
+    ? `<strong>Bautizado</strong><small>Confirmado</small>`
+    : `<strong>Sin confirmar</strong><small>Todavía no se marcó como bautizado</small>`;
+  const boton = persona.bautizado
+    ? `<button type="button" class="btn-servidor quitar" id="btn-toggle-bautizado">Quitar bautizado</button>`
+    : `<button type="button" class="btn-servidor marcar" id="btn-toggle-bautizado">Marcar como bautizado</button>`;
+  slot.innerHTML = `<div class="servicio-card"><div class="servicio-card-texto">${texto}</div>${boton}</div>`;
+
+  document.getElementById("btn-toggle-bautizado").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const actualizada = await Api.editarPersona(persona.id, { bautizado: !persona.bautizado });
+      Object.assign(persona, actualizada);
+      pintarBautizado(persona);
+    } catch (err) {
+      btn.disabled = false;
+      alert(`No se pudo actualizar: ${err.message}`);
+    }
+  });
+}
 
 // --- "Activo en el ministerio": confirmación manual persona por persona
 // (pedido del usuario, 2026-08-13) — nunca se marca sola al crear/editar
@@ -1105,6 +1153,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
 
     <div id="activo-ministerio-slot"></div>
     <div id="servicio-slot"></div>
+    <div id="bautizado-slot"></div>
 
     <h2>Datos</h2>
     <form id="form-ficha"></form>
@@ -1116,6 +1165,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
 
   pintarActivoMinisterio(persona);
   pintarServicio(persona);
+  pintarBautizado(persona);
 
   let editando = false;
   const $form = document.getElementById("form-ficha");

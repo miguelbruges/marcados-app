@@ -6,8 +6,13 @@
 <title>MARCADOS</title>
 <meta name="theme-color" content="#241329">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="img/favicon-48.png" type="image/png">
-<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<!-- ?v=1: los navegadores cachean el favicon por separado del resto de la
+     página (aparte incluso del index.html sin-cache) — si el sitio ya se
+     había visitado antes sin ícono, se queda pegado mostrando el genérico
+     para siempre a menos que la URL del ícono cambie de verdad. Subir este
+     número fuerza a que se vuelva a pedir. -->
+<link rel="icon" href="img/favicon-48.png?v=1" type="image/png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=1">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
