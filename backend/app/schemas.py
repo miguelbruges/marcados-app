@@ -71,6 +71,7 @@ class PersonaBase(BaseModel):
     fecha_ingreso: date | None = None
     fecha_inicio_servicio: date | None = None
     invitado_por_id: int | None = None
+    activo_ministerio: bool = False
 
 
 class PersonaCreate(PersonaBase):
@@ -111,6 +112,7 @@ class PersonaUpdate(BaseModel):
     fecha_inicio_servicio: date | None = None
     invitado_por_id: int | None = None
     activo: bool | None = None
+    activo_ministerio: bool | None = None
 
 
 class PersonaOut(PersonaBase):

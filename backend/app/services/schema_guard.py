@@ -36,6 +36,15 @@ def asegurar_esquema_minimo(engine: Engine) -> None:
                     {"valor": False if es_postgres else 0},
                 )
 
+    if "personas" in insp.get_table_names():
+        columnas = {c["name"] for c in insp.get_columns("personas")}
+        if "activo_ministerio" not in columnas:
+            with engine.begin() as conn:
+                valor_default = "false" if es_postgres else "0"
+                conn.execute(
+                    text(f"ALTER TABLE personas ADD COLUMN activo_ministerio BOOLEAN NOT NULL DEFAULT {valor_default}")
+                )
+
     if "plantilla_excel" not in insp.get_table_names():
         with engine.begin() as conn:
             if es_postgres:

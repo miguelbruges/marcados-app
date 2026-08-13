@@ -394,6 +394,15 @@ button.secundario {
 .kpi .kpi-detalle { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.32s ease; }
 .kpi[data-abierto="true"] .kpi-detalle { grid-template-rows: 1fr; }
 .kpi .kpi-detalle-int { overflow: hidden; }
+.kpi .kpi-buscador {
+  display: block;
+  margin: 0.7rem 1.1rem 0;
+  width: calc(100% - 2.2rem);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
 .kpi .kpi-lista { list-style: none; margin: 0; padding: 0 1.1rem 1.05rem; border-top: 1px dashed var(--borde); padding-top: 0.7rem; }
 .kpi .kpi-lista li { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0; font-size: 0.86rem; }
 .kpi .kpi-lista li + li { border-top: 1px solid var(--borde); }

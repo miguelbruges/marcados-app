@@ -190,7 +190,7 @@ Router.on("/panel", async () => {
       const todas = activos.concat(inactivos);
       pintarKpis([
         { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo"), filtro: null },
-        { label: "Activos", valor: resumen.activos, personas: activos, etiqueta: () => "activo", filtro: "activos" },
+        { label: "Activos", valor: resumen.activos, personas: todas.filter((p) => p.activo_ministerio), etiqueta: () => "activo", vacioTexto: "Nadie confirmado como activo todavía — se marca desde la ficha de cada joven.", filtro: "activos" },
         { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados" },
         { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores" },
         { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
@@ -357,22 +357,33 @@ Router.on("/alertas", async () => {
 
 // Tarjetas KPI del panel: se tocan y se abren mostrando la lista de
 // personas detrás del número — antes solo se veía el total.
+const KPI_PREVIA_LIMITE = 6;
+
+function listaKpiHtml(personas, etiqueta, sinResultadosTexto) {
+  if (!personas.length) return `<p class="kpi-vacio">${sinResultadosTexto}</p>`;
+  return `<ul class="kpi-lista">${personas
+    .map((p) => `<li>${p.nombre_completo}<span class="badge ALTA">${etiqueta(p)}</span></li>`)
+    .join("")}</ul>`;
+}
+
 function pintarKpis(items) {
   const grid = document.getElementById("grid-kpi");
   grid.innerHTML = "";
   items.forEach((item, idx) => {
-    const nombres = item.personas.slice(0, 6);
+    const esLarga = item.personas.length > KPI_PREVIA_LIMITE;
     const art = document.createElement("article");
     art.className = "kpi";
     art.dataset.abierto = "false";
     const idDet = `kpi-detalle-${idx}`;
     const hrefVerTodos = item.filtro ? `#/personas?filtro=${item.filtro}` : "#/personas";
-    const contenidoLista = nombres.length
-      ? `<ul class="kpi-lista">${nombres
-          .map((p) => `<li>${p.nombre_completo}<span class="badge ALTA">${item.etiqueta(p)}</span></li>`)
-          .join("")}</ul>
-         ${item.personas.length > nombres.length ? `<a class="kpi-vertodos" href="${hrefVerTodos}">Ver los ${item.personas.length} completos →</a>` : ""}`
-      : `<p class="kpi-vacio">${item.vacioTexto || "Nadie en esta categoría todavía."}</p>`;
+    const vacioTexto = item.vacioTexto || "Nadie en esta categoría todavía.";
+    const buscadorHtml = esLarga
+      ? `<input type="search" class="kpi-buscador" placeholder="Buscar en esta lista..." autocomplete="off">`
+      : "";
+    const listaHtml = listaKpiHtml(item.personas.slice(0, KPI_PREVIA_LIMITE), item.etiqueta, vacioTexto);
+    const linkVerTodosHtml = esLarga
+      ? `<a class="kpi-vertodos" href="${hrefVerTodos}">Ver los ${item.personas.length} completos →</a>`
+      : "";
     art.innerHTML = `
       <button class="kpi-cabecera" type="button" aria-expanded="false" aria-controls="${idDet}">
         <span class="kpi-num">${item.valor}</span>
@@ -381,13 +392,35 @@ function pintarKpis(items) {
           <span class="kpi-flecha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
         </span>
       </button>
-      <div class="kpi-detalle" id="${idDet}"><div class="kpi-detalle-int">${contenidoLista}</div></div>
+      <div class="kpi-detalle" id="${idDet}">
+        <div class="kpi-detalle-int">
+          ${buscadorHtml}
+          <div class="kpi-lista-slot">${listaHtml}</div>
+          <div class="kpi-vertodos-slot">${linkVerTodosHtml}</div>
+        </div>
+      </div>
     `;
     art.querySelector("button.kpi-cabecera").addEventListener("click", () => {
       const abierto = art.dataset.abierto === "true";
       art.dataset.abierto = abierto ? "false" : "true";
       art.querySelector("button.kpi-cabecera").setAttribute("aria-expanded", String(!abierto));
     });
+    if (esLarga) {
+      const $buscador = art.querySelector(".kpi-buscador");
+      const $listaSlot = art.querySelector(".kpi-lista-slot");
+      const $verTodosSlot = art.querySelector(".kpi-vertodos-slot");
+      $buscador.addEventListener("input", (e) => {
+        const q = normalizarTexto(e.target.value.trim());
+        if (!q) {
+          $listaSlot.innerHTML = listaKpiHtml(item.personas.slice(0, KPI_PREVIA_LIMITE), item.etiqueta, vacioTexto);
+          $verTodosSlot.innerHTML = linkVerTodosHtml;
+          return;
+        }
+        const encontradas = item.personas.filter((p) => normalizarTexto(p.nombre_completo).includes(q));
+        $listaSlot.innerHTML = listaKpiHtml(encontradas, item.etiqueta, `Nadie coincide con "${e.target.value.trim()}".`);
+        $verTodosSlot.innerHTML = "";
+      });
+    }
     grid.appendChild(art);
   });
 }
@@ -811,7 +844,7 @@ function filaPersona(p) {
     <div class="card">
       <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
       <div class="hint">
-        ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
+        ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.activo_ministerio ? " · activo" : ""}${p.bautizado ? " · bautizado" : ""}
         ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
       </div>
       <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
@@ -845,7 +878,7 @@ Router.on("/personas", async () => {
     const [activas, inactivas] = await Promise.all([Api.personas(true), Api.personas(false)]);
     if (!Router.vigente(miToken)) return;
     let personas = activas.concat(inactivas);
-    if (filtro === "activos") personas = activas;
+    if (filtro === "activos") personas = personas.filter((p) => p.activo_ministerio);
     else if (filtro === "inactivos") personas = inactivas;
     else if (filtro === "bautizados") personas = personas.filter((p) => p.bautizado);
     else if (filtro === "servidores") personas = personas.filter((p) => p.servidor);
@@ -961,6 +994,35 @@ Router.on("/personas/ver", async () => {
 // Excel, es una lista corta y estable (pedido del usuario, 2026-08-12).
 const TIPOS_SEGUIMIENTO = ["Llamada", "Visita", "Mensaje", "Reunión personal", "Oración", "Otro"];
 
+// --- "Activo en el ministerio": confirmación manual persona por persona
+// (pedido del usuario, 2026-08-13) — nunca se marca sola al crear/editar
+// otros campos, arranca en False para todos y el liderazgo la va tocando
+// a mano a medida que confirma quién sigue participando. ---
+function pintarActivoMinisterio(persona) {
+  const slot = document.getElementById("activo-ministerio-slot");
+  if (!slot) return;
+  const texto = persona.activo_ministerio
+    ? `<strong>Activo</strong><small>Confirmado como activo en el ministerio</small>`
+    : `<strong>Sin confirmar</strong><small>Todavía no se marcó como activo</small>`;
+  const boton = persona.activo_ministerio
+    ? `<button type="button" class="btn-servidor quitar" id="btn-toggle-activo-ministerio">Quitar de activos</button>`
+    : `<button type="button" class="btn-servidor marcar" id="btn-toggle-activo-ministerio">Marcar como activo</button>`;
+  slot.innerHTML = `<div class="servicio-card"><div class="servicio-card-texto">${texto}</div>${boton}</div>`;
+
+  document.getElementById("btn-toggle-activo-ministerio").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const actualizada = await Api.editarPersona(persona.id, { activo_ministerio: !persona.activo_ministerio });
+      Object.assign(persona, actualizada);
+      pintarActivoMinisterio(persona);
+    } catch (err) {
+      btn.disabled = false;
+      alert(`No se pudo actualizar: ${err.message}`);
+    }
+  });
+}
+
 // --- Estado de servicio: botón directo en la ficha (reemplaza la pantalla
 // aparte "Nuevo servidor (reunión STAFF)", pedido del usuario, 2026-08-12).
 // Distingue servidor ACTIVO de servidor INACTIVO (fue servidor, ya no) a
@@ -1041,6 +1103,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     ${seccionAlertas}
     ${persona.datos_faltantes.length ? `<p class="hint">Faltan: ${persona.datos_faltantes.join(", ")}</p>` : ""}
 
+    <div id="activo-ministerio-slot"></div>
     <div id="servicio-slot"></div>
 
     <h2>Datos</h2>
@@ -1051,6 +1114,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     ${seccionSeguimiento}
   `;
 
+  pintarActivoMinisterio(persona);
   pintarServicio(persona);
 
   let editando = false;

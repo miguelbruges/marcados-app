@@ -123,7 +123,14 @@ class Persona(Base):
     # crean desde la app en adelante (esos sí reciben fecha_ingreso = hoy).
     registro_historico: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # `activo`: la ficha existe / no fue archivada — no dice nada sobre si el
+    # joven sigue viniendo. `activo_ministerio` es lo que el Panel muestra
+    # como "Activos": empieza en False para todos y lo va marcando el
+    # liderazgo persona por persona a medida que confirma quién sigue
+    # participando (pedido del usuario, 2026-08-13). Nunca se auto-marca al
+    # crear una persona ni al editar otros campos.
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    activo_ministerio: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

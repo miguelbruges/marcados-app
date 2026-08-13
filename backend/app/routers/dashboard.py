@@ -18,7 +18,9 @@ def resumen(db: Session = Depends(get_db), _=Depends(get_current_user)):
     """Panel mínimo: conteos simples. Nada de semáforo agregado ni conclusiones
     espirituales calculadas — eso lo decide una persona, no este endpoint."""
     total = db.scalar(select(func.count()).select_from(Persona)) or 0
-    activos = db.scalar(select(func.count()).select_from(Persona).where(Persona.activo == True)) or 0  # noqa: E712
+    # activo_ministerio, no el `activo` de la ficha (existe/archivada) — ver
+    # comentario en el modelo. Es manual y arranca en False para todos.
+    activos = db.scalar(select(func.count()).select_from(Persona).where(Persona.activo_ministerio == True)) or 0  # noqa: E712
     bautizados = db.scalar(select(func.count()).select_from(Persona).where(Persona.bautizado == True)) or 0  # noqa: E712
     sirviendo = db.scalar(select(func.count(func.distinct(Persona.id))).select_from(Persona).where(Persona.servidor == True)) or 0  # noqa: E712
 
