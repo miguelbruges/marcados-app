@@ -115,15 +115,8 @@ button { font-family: inherit; }
   align-items: center;
 }
 
-.brand { display: flex; align-items: center; gap: 0.5rem; font-family: var(--display); font-weight: 800; letter-spacing: 0.04em; }
-.brand::before {
-  content: "";
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--naranja-500);
-  box-shadow: 0 0 0 4px rgba(240, 146, 61, 0.25);
-}
+.brand { display: flex; align-items: center; }
+.brand-logo { height: 2.1rem; width: auto; display: block; }
 
 .topbar-acciones { display: flex; align-items: center; gap: 0.5rem; }
 
