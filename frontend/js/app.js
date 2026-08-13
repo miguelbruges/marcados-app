@@ -4,6 +4,58 @@ const $btnSalir = document.getElementById("btn-salir");
 const $btnAdminGear = document.getElementById("btn-admin-gear");
 const $btnAlertas = document.getElementById("btn-alertas");
 
+// --- Instalar como app: para que el equipo de consolidación pueda abrir
+// MARCADOS desde su pantalla de inicio como una app real, no un enlace
+// más en el navegador (pedido del usuario, 2026-08-12). En Android/Chrome
+// se puede disparar el diálogo de instalación desde acá; en iPhone Safari
+// no existe esa API — solo se puede explicar el paso manual. ---
+(function inicializarBannerInstalar() {
+  const LS_KEY = "marcados_banner_instalar_oculto";
+  if (localStorage.getItem(LS_KEY)) return;
+
+  const yaInstalada =
+    window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  if (yaInstalada) return;
+
+  const $banner = document.getElementById("banner-instalar");
+  const $texto = document.getElementById("banner-instalar-texto");
+  const $btnInstalar = document.getElementById("btn-instalar");
+  const $btnCerrar = document.getElementById("btn-instalar-cerrar");
+  if (!$banner) return;
+
+  function ocultar() {
+    $banner.hidden = true;
+    localStorage.setItem(LS_KEY, "1");
+  }
+  $btnCerrar.addEventListener("click", ocultar);
+
+  const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (esIOS) {
+    $texto.textContent = 'Para instalarla: tocá "Compartir" en Safari y elegí "Agregar a inicio".';
+    $banner.hidden = false;
+    return;
+  }
+
+  let promptDiferido = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    promptDiferido = e;
+    $btnInstalar.hidden = false;
+    $banner.hidden = false;
+  });
+
+  $btnInstalar.addEventListener("click", async () => {
+    if (!promptDiferido) return;
+    $banner.hidden = true;
+    promptDiferido.prompt();
+    await promptDiferido.userChoice;
+    promptDiferido = null;
+    localStorage.setItem(LS_KEY, "1");
+  });
+
+  window.addEventListener("appinstalled", () => localStorage.setItem(LS_KEY, "1"));
+})();
+
 // Política de acceso (definida por el usuario, 2026-08-10): el seguimiento
 // pastoral y el semáforo de asistencia son solo para líderes y encargados
 // de área — no para todo el equipo de consolidación. El backend ya lo

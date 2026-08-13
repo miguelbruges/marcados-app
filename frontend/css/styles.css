@@ -49,6 +49,15 @@
 
 * { box-sizing: border-box; }
 
+/* El atributo/propiedad `hidden` tiene que ganar siempre. Sin esto, cualquier
+   elemento que además tenga un `display` propio (flex, grid...) ignora
+   `hidden` por completo — es como se descubrió que la barra inferior
+   quedaba visible en la pantalla de login pese a `$tabbar.hidden = true`,
+   porque `.tabbar { display: flex }` le ganaba a la regla [hidden] del
+   navegador con la misma especificidad. Esto lo corrige para todo el sitio,
+   no solo para el caso puntual encontrado. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: var(--cuerpo);
@@ -61,6 +70,38 @@ body {
 
 svg.ico { width: 1.15rem; height: 1.15rem; display: block; flex: none; }
 button { font-family: inherit; }
+
+.banner-instalar {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: var(--naranja-100);
+  color: var(--morado-800);
+  padding: 0.6rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.banner-instalar-acciones { display: flex; align-items: center; gap: 0.4rem; margin-left: auto; flex: none; }
+#btn-instalar {
+  background: var(--morado-600);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+#btn-instalar-cerrar {
+  background: none;
+  border: none;
+  color: var(--morado-700);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.3rem;
+  cursor: pointer;
+}
 
 .topbar {
   position: sticky;
