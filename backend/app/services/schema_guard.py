@@ -13,10 +13,25 @@ usando SQL directo e idempotente (verifica antes de crear). Las
 migraciones de Alembic siguen siendo la fuente de verdad y quedan
 actualizadas para no chocar con esto: si Alembic corre después y la
 columna/tabla ya existe, no vuelve a intentar crearla.
+
+Para operaciones que no son "crear si falta" (ej. una migración de datos
+que solo debe correr una vez, como el reinicio de servidor/bautizado) se
+usa `schema_guard_aplicado` como marca — una tabla propia de este archivo,
+sin tocar `alembic_version` (que es de Alembic, no de acá).
 """
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
+
+
+def _ya_aplicado(conn, clave: str) -> bool:
+    conn.execute(text("CREATE TABLE IF NOT EXISTS schema_guard_aplicado (clave VARCHAR(64) PRIMARY KEY)"))
+    fila = conn.execute(text("SELECT 1 FROM schema_guard_aplicado WHERE clave = :c"), {"c": clave}).first()
+    return fila is not None
+
+
+def _marcar_aplicado(conn, clave: str) -> None:
+    conn.execute(text("INSERT INTO schema_guard_aplicado (clave) VALUES (:c)"), {"c": clave})
 
 
 def asegurar_esquema_minimo(engine: Engine) -> None:
@@ -38,45 +53,28 @@ def asegurar_esquema_minimo(engine: Engine) -> None:
 
     if "personas" in insp.get_table_names():
         columnas = {c["name"] for c in insp.get_columns("personas")}
-        if "activo_ministerio" not in columnas:
+        if "activo_ministerio" in columnas:
+            # Se sacó (pedido del usuario, 2026-08-14): "Estado" ya cubre
+            # el mismo criterio (Activo/Inactivo/Fluctúa) — ver migración
+            # 64ebe67f6c06.
             with engine.begin() as conn:
-                valor_default = "false" if es_postgres else "0"
-                conn.execute(
-                    text(f"ALTER TABLE personas ADD COLUMN activo_ministerio BOOLEAN NOT NULL DEFAULT {valor_default}")
-                )
+                conn.execute(text("ALTER TABLE personas DROP COLUMN activo_ministerio"))
 
-        # Reinicio de servidor/bautizado a False para todas las personas
-        # (pedido del usuario, 2026-08-13 — ver migración 7b8b896aedf6). Se
-        # confirmó con el usuario antes de aplicarlo. Igual que con
-        # cuenta_para_semaforo, no hay garantía de que Alembic haya llegado
-        # a correr en este despliegue, así que se auto-aplica acá.
-        # `alembic_version` es la marca de que ya corrió — sin ella, un
-        # reinicio del servidor (Render duerme y despierta seguido en la
-        # capa gratuita) volvería a poner todo en False una y otra vez,
-        # borrando cualquier corrección manual que el liderazgo ya haya
-        # hecho desde la ficha.
-        REVISION_RESET_SERVIDOR_BAUTIZADO = "7b8b896aedf6"
-        version_actual = None
-        if "alembic_version" in insp.get_table_names():
-            with engine.begin() as conn:
-                version_actual = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        if version_actual != REVISION_RESET_SERVIDOR_BAUTIZADO:
-            with engine.begin() as conn:
+        # Reinicio de servidor/bautizado a False para todas las personas,
+        # una única vez (pedido del usuario, 2026-08-13 — ver migración
+        # 7b8b896aedf6). Se confirmó con el usuario antes de aplicarlo.
+        # Repetirlo en cada reinicio del proceso (Render duerme y despierta
+        # seguido en la capa gratuita) borraría correcciones manuales ya
+        # hechas por el liderazgo, por eso la marca en
+        # `schema_guard_aplicado` en vez de repetirlo sin más.
+        CLAVE_RESET_SERVIDOR_BAUTIZADO = "reset_servidor_bautizado_2026_08_13"
+        with engine.begin() as conn:
+            if not _ya_aplicado(conn, CLAVE_RESET_SERVIDOR_BAUTIZADO):
                 conn.execute(
                     text("UPDATE personas SET servidor = :f, bautizado = :f"),
                     {"f": False if es_postgres else 0},
                 )
-                if "alembic_version" not in insp.get_table_names():
-                    conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
-                    conn.execute(
-                        text("INSERT INTO alembic_version (version_num) VALUES (:v)"),
-                        {"v": REVISION_RESET_SERVIDOR_BAUTIZADO},
-                    )
-                else:
-                    conn.execute(
-                        text("UPDATE alembic_version SET version_num = :v"),
-                        {"v": REVISION_RESET_SERVIDOR_BAUTIZADO},
-                    )
+                _marcar_aplicado(conn, CLAVE_RESET_SERVIDOR_BAUTIZADO)
 
     if "plantilla_excel" not in insp.get_table_names():
         with engine.begin() as conn:

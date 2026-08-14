@@ -190,7 +190,7 @@ Router.on("/panel", async () => {
       const todas = activos.concat(inactivos);
       pintarKpis([
         { label: "Total jóvenes", valor: resumen.total_jovenes, personas: todas, etiqueta: (p) => (p.activo ? "activo" : "inactivo"), filtro: null },
-        { label: "Activos", valor: resumen.activos, personas: todas.filter((p) => p.activo_ministerio), etiqueta: () => "activo", vacioTexto: "Nadie confirmado como activo todavía — se marca desde la ficha de cada joven.", filtro: "activos", resaltar: "activo-ministerio-slot" },
+        { label: "Activos", valor: resumen.activos, personas: todas.filter((p) => p.estado === "Activo"), etiqueta: (p) => p.estado, vacioTexto: "Nadie con estado Activo todavía — se marca desde la ficha de cada joven.", filtro: "activos", resaltar: "campo-estado" },
         { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados", resaltar: "bautizado-slot" },
         { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores", resaltar: "servicio-slot" },
         { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
@@ -848,7 +848,7 @@ function filaPersona(p) {
     <div class="card">
       <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
       <div class="hint">
-        ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.activo_ministerio ? " · activo" : ""}${p.bautizado ? " · bautizado" : ""}
+        ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
         ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
       </div>
       <div class="hint">Ingresó: ${p.fecha_ingreso || "—"}</div>
@@ -882,7 +882,7 @@ Router.on("/personas", async () => {
     const [activas, inactivas] = await Promise.all([Api.personas(true), Api.personas(false)]);
     if (!Router.vigente(miToken)) return;
     let personas = activas.concat(inactivas);
-    if (filtro === "activos") personas = personas.filter((p) => p.activo_ministerio);
+    if (filtro === "activos") personas = personas.filter((p) => p.estado === "Activo");
     else if (filtro === "inactivos") personas = inactivas;
     else if (filtro === "bautizados") personas = personas.filter((p) => p.bautizado);
     else if (filtro === "servidores") personas = personas.filter((p) => p.servidor);
@@ -1013,10 +1013,10 @@ function resaltarSeccionFicha(idSeccion) {
 // Excel, es una lista corta y estable (pedido del usuario, 2026-08-12).
 const TIPOS_SEGUIMIENTO = ["Llamada", "Visita", "Mensaje", "Reunión personal", "Oración", "Otro"];
 
-// --- Bautizado: mismo patrón de toggle que servidor/activo_ministerio.
-// Hacía falta un control acá porque antes bautizado solo se podía fijar
-// al crear la persona — sin esto no había forma de reconfirmarlo desde la
-// ficha después del reinicio a False (pedido del usuario, 2026-08-13). ---
+// --- Bautizado: mismo patrón de toggle que servidor. Hacía falta un
+// control acá porque antes bautizado solo se podía fijar al crear la
+// persona — sin esto no había forma de reconfirmarlo desde la ficha
+// después del reinicio a False (pedido del usuario, 2026-08-13). ---
 function pintarBautizado(persona) {
   const slot = document.getElementById("bautizado-slot");
   if (!slot) return;
@@ -1035,35 +1035,6 @@ function pintarBautizado(persona) {
       const actualizada = await Api.editarPersona(persona.id, { bautizado: !persona.bautizado });
       Object.assign(persona, actualizada);
       pintarBautizado(persona);
-    } catch (err) {
-      btn.disabled = false;
-      alert(`No se pudo actualizar: ${err.message}`);
-    }
-  });
-}
-
-// --- "Activo en el ministerio": confirmación manual persona por persona
-// (pedido del usuario, 2026-08-13) — nunca se marca sola al crear/editar
-// otros campos, arranca en False para todos y el liderazgo la va tocando
-// a mano a medida que confirma quién sigue participando. ---
-function pintarActivoMinisterio(persona) {
-  const slot = document.getElementById("activo-ministerio-slot");
-  if (!slot) return;
-  const texto = persona.activo_ministerio
-    ? `<strong>Activo</strong><small>Confirmado como activo en el ministerio</small>`
-    : `<strong>Sin confirmar</strong><small>Todavía no se marcó como activo</small>`;
-  const boton = persona.activo_ministerio
-    ? `<button type="button" class="btn-servidor quitar" id="btn-toggle-activo-ministerio">Quitar de activos</button>`
-    : `<button type="button" class="btn-servidor marcar" id="btn-toggle-activo-ministerio">Marcar como activo</button>`;
-  slot.innerHTML = `<div class="servicio-card"><div class="servicio-card-texto">${texto}</div>${boton}</div>`;
-
-  document.getElementById("btn-toggle-activo-ministerio").addEventListener("click", async (e) => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    try {
-      const actualizada = await Api.editarPersona(persona.id, { activo_ministerio: !persona.activo_ministerio });
-      Object.assign(persona, actualizada);
-      pintarActivoMinisterio(persona);
     } catch (err) {
       btn.disabled = false;
       alert(`No se pudo actualizar: ${err.message}`);
@@ -1151,19 +1122,17 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     ${seccionAlertas}
     ${persona.datos_faltantes.length ? `<p class="hint">Faltan: ${persona.datos_faltantes.join(", ")}</p>` : ""}
 
-    <div id="activo-ministerio-slot"></div>
-    <div id="servicio-slot"></div>
-    <div id="bautizado-slot"></div>
-
     <h2>Datos</h2>
     <form id="form-ficha"></form>
     <button id="btn-editar-ficha" class="secundario">Editar</button>
     <div class="error" id="ficha-error"></div>
 
+    <div id="servicio-slot"></div>
+    <div id="bautizado-slot"></div>
+
     ${seccionSeguimiento}
   `;
 
-  pintarActivoMinisterio(persona);
   pintarServicio(persona);
   pintarBautizado(persona);
 
@@ -1205,7 +1174,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     const camposHtml = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
       const valor = persona[campo] ?? "";
       if (!editando) {
-        return `<div class="hint"><strong>${etiqueta}:</strong> ${valor || "—"}</div>`;
+        return `<div class="hint" id="campo-${campo}"><strong>${etiqueta}:</strong> ${valor || "—"}</div>`;
       }
       return campoInput(campo, etiqueta, tipo, valor);
     }).join("");

@@ -492,16 +492,28 @@ button.secundario {
 .servicio-card-texto small { color: var(--texto-suave); font-size: 0.78rem; }
 
 /* Al llegar a la ficha desde una tarjeta del Panel, un destello breve en
-   el borde de la parte correspondiente (activo/servidor/bautizado) para
-   que salte a la vista sin tener que buscarla (pedido del usuario,
-   2026-08-13). */
+   el borde de la parte correspondiente (servidor/bautizado, o el campo
+   "Estado" para Activos) para que salte a la vista sin tener que
+   buscarla (pedido del usuario, 2026-08-13). */
 .resaltado .servicio-card { animation: destello-resalte 2.2s ease; }
 @keyframes destello-resalte {
   0%, 100% { box-shadow: var(--sombra); border-color: var(--borde); }
   15% { box-shadow: 0 0 0 3px var(--naranja-500); border-color: var(--naranja-500); }
 }
+/* Campos sueltos de "Datos" (ej. #campo-estado) — no tienen su propia
+   tarjeta como servicio-slot/bautizado-slot, así que el destello va
+   directo sobre el propio div. */
+[id^="campo-"].resaltado {
+  animation: destello-campo 2.2s ease;
+  border-radius: 8px;
+}
+@keyframes destello-campo {
+  0%, 100% { box-shadow: none; }
+  15% { box-shadow: 0 0 0 3px var(--naranja-500); }
+}
 @media (prefers-reduced-motion: reduce) {
   .resaltado .servicio-card { animation: none; box-shadow: 0 0 0 3px var(--naranja-500); border-color: var(--naranja-500); }
+  [id^="campo-"].resaltado { animation: none; box-shadow: 0 0 0 3px var(--naranja-500); }
 }
 .btn-servidor {
   flex: none;

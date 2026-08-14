@@ -124,13 +124,13 @@ class Persona(Base):
     registro_historico: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # `activo`: la ficha existe / no fue archivada — no dice nada sobre si el
-    # joven sigue viniendo. `activo_ministerio` es lo que el Panel muestra
-    # como "Activos": empieza en False para todos y lo va marcando el
-    # liderazgo persona por persona a medida que confirma quién sigue
-    # participando (pedido del usuario, 2026-08-13). Nunca se auto-marca al
-    # crear una persona ni al editar otros campos.
+    # joven sigue viniendo. Eso ya lo cubre `estado` (catálogo:
+    # Activo/Inactivo/Fluctúa, migrado del Excel original) — el Panel
+    # cuenta "Activos" sobre estado == "Activo" en vez de un campo booleano
+    # aparte, para no duplicar el mismo criterio en dos lugares (pedido del
+    # usuario, 2026-08-13: hubo un `activo_ministerio` separado que se
+    # sacó por esto mismo — ver migración 64ebe67f6c06).
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
-    activo_ministerio: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

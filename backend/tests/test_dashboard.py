@@ -49,19 +49,22 @@ def test_asistieron_30_dias_vacio_sin_datos(client, auth_headers):
     assert resp.json() == []
 
 
-def test_resumen_activos_cuenta_activo_ministerio_no_el_activo_de_ficha(client, auth_headers):
-    """activo_ministerio es la confirmación manual de "sigue en el
-    ministerio" — separado de `activo` (la ficha existe/no está archivada).
-    Antes el Panel mostraba "Activos" leyendo `activo`, que es True por
-    defecto para toda persona nueva, así que daba el total siempre sin
-    distinguir nada real (pedido del usuario, 2026-08-13)."""
+def test_resumen_activos_cuenta_estado_activo_no_el_activo_de_ficha(client, auth_headers):
+    """`estado` (catálogo Activo/Inactivo/Fluctúa, migrado del Excel
+    original) es el criterio real de "sigue en el ministerio" — separado
+    de `activo` (la ficha existe/no está archivada). Antes el Panel
+    mostraba "Activos" leyendo `activo`, que es True por defecto para toda
+    persona nueva, así que daba el total siempre sin distinguir nada real
+    (pedido del usuario, 2026-08-13). Se probó primero con un campo nuevo
+    aparte (`activo_ministerio`), pero era redundante con `estado`, que ya
+    cubría lo mismo (pedido del usuario, 2026-08-14)."""
     p1 = client.post("/personas", json={"nombres": "Ana", "apellidos": "Uno"}, headers=auth_headers).json()
-    client.post("/personas", json={"nombres": "Beto", "apellidos": "Dos"}, headers=auth_headers)
+    client.post("/personas", json={"nombres": "Beto", "apellidos": "Dos", "estado": "Inactivo"}, headers=auth_headers)
 
     resp = client.get("/dashboard/resumen", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["activos"] == 0  # arranca en 0 pese a que `activo` es True por defecto
+    assert resp.json()["activos"] == 0  # nadie con estado="Activo" todavía
 
-    client.patch(f"/personas/{p1['id']}", json={"activo_ministerio": True}, headers=auth_headers)
+    client.patch(f"/personas/{p1['id']}", json={"estado": "Activo"}, headers=auth_headers)
     resp = client.get("/dashboard/resumen", headers=auth_headers)
     assert resp.json()["activos"] == 1

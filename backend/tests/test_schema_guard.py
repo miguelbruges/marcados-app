@@ -97,13 +97,22 @@ def _crear_tabla_personas(engine, servidor=1, bautizado=1):
         )
 
 
-def test_agrega_activo_ministerio_si_falta_en_personas(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'sin_activo_ministerio.db'}")
-    _crear_tabla_personas(engine)
+def test_quita_activo_ministerio_si_existe_en_personas(tmp_path):
+    """Se sacó (pedido del usuario, 2026-08-14): "Estado" ya cubre el mismo
+    criterio (Activo/Inactivo/Fluctúa) — ver migración 64ebe67f6c06."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'con_activo_ministerio.db'}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE personas (id INTEGER PRIMARY KEY, nombres TEXT, servidor BOOLEAN, "
+                "bautizado BOOLEAN, activo_ministerio BOOLEAN NOT NULL DEFAULT 0)"
+            )
+        )
+        conn.execute(text("INSERT INTO personas (nombres, servidor, bautizado) VALUES ('Ana', 0, 0)"))
 
     asegurar_esquema_minimo(engine)
 
-    assert "activo_ministerio" in {c["name"] for c in inspect(engine).get_columns("personas")}
+    assert "activo_ministerio" not in {c["name"] for c in inspect(engine).get_columns("personas")}
 
 
 def test_reinicia_servidor_y_bautizado_a_false_la_primera_vez(tmp_path):
@@ -123,8 +132,10 @@ def test_reinicia_servidor_y_bautizado_a_false_la_primera_vez(tmp_path):
     assert fila.bautizado == 0
 
     with engine.connect() as conn:
-        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "7b8b896aedf6"
+        marcado = conn.execute(
+            text("SELECT 1 FROM schema_guard_aplicado WHERE clave = 'reset_servidor_bautizado_2026_08_13'")
+        ).first()
+    assert marcado is not None
 
 
 def test_no_repite_el_reinicio_en_una_segunda_pasada(tmp_path):
@@ -134,28 +145,12 @@ def test_no_repite_el_reinicio_en_una_segunda_pasada(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'no_repetir.db'}")
     _crear_tabla_personas(engine, servidor=1, bautizado=1)
 
-    asegurar_esquema_minimo(engine)  # primera pasada: reinicia y marca alembic_version
+    asegurar_esquema_minimo(engine)  # primera pasada: reinicia y marca
 
     with engine.begin() as conn:
         conn.execute(text("UPDATE personas SET servidor = 1 WHERE nombres='Ana'"))  # corrección manual simulada
 
     asegurar_esquema_minimo(engine)  # segunda pasada: no debe tocar nada de nuevo
-
-    with engine.connect() as conn:
-        valor = conn.execute(text("SELECT servidor FROM personas WHERE nombres='Ana'")).scalar()
-    assert valor == 1
-
-
-def test_no_reinicia_si_alembic_version_ya_esta_al_dia(tmp_path):
-    """Si Alembic sí llegó a correr la migración de verdad, alembic_version
-    ya está en la revisión final — no hay que repetir el reinicio."""
-    engine = create_engine(f"sqlite:///{tmp_path / 'ya_al_dia.db'}")
-    _crear_tabla_personas(engine, servidor=1, bautizado=1)
-    with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
-        conn.execute(text("INSERT INTO alembic_version (version_num) VALUES ('7b8b896aedf6')"))
-
-    asegurar_esquema_minimo(engine)
 
     with engine.connect() as conn:
         valor = conn.execute(text("SELECT servidor FROM personas WHERE nombres='Ana'")).scalar()
