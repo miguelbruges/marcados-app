@@ -32,23 +32,27 @@ backend, todos pasando.
 Detalle de cada pieza, `README.md` (raíz del repo). Decisiones de diseño,
 `docs/ARQUITECTURA.md`.
 
-## Pendiente — auditoría 2026-08-14
+## Auditoría 2026-08-14 — completa
 
 Pedido del usuario: revisar todo el sistema y sacar una lista de mejoras.
-En progreso, en orden:
+Las cinco quedaron resueltas:
 
 - [x] Actualizar README y este archivo (estaban describiendo un estado de
       hace semanas — SQLite efímero, sin datos reales, 39 tests).
-- [ ] Límite de intentos de login (rate limiting) — hoy no hay ningún
-      freno a intentos repetidos de adivinar una contraseña.
-- [ ] Checklist de "pendientes por confirmar" (servidor/bautizado) — se
-      reiniciaron a False para las 120 personas reales (pedido del
-      usuario, 2026-08-13) y hoy no hay forma de ver a quién ya se
-      revisó, usando la Bitácora existente como fuente de verdad.
-- [ ] Paginación en `GET /personas` — funciona con 120, no escala si la
-      app crece a todas las áreas de MARCADOS.
-- [ ] Separar `frontend/js/app.js` (1853 líneas) en módulos por pantalla
-      — refactor mecánico, sin cambiar comportamiento.
+- [x] Límite de intentos de login (rate limiting) — 5 fallos seguidos con
+      el mismo email bloquean 15 minutos.
+- [x] Checklist de "pendientes por confirmar" (servidor/bautizado) —
+      `GET /personas/pendientes-revision`, usando la Bitácora existente
+      como fuente de verdad. Pantalla enlazada desde Jóvenes.
+- [x] Paginación en `GET /personas` — `limit`/`offset` opcionales, sin
+      cambiar el comportamiento por defecto.
+- [x] Separar `frontend/js/app.js` (1897 líneas) en módulos por pantalla
+      (`app-core.js`, `app-panel.js`, `app-admin.js`, `app-personas.js`,
+      `app-asistencia.js`, `app-bootstrap.js`) — mismo comportamiento,
+      verificado con Playwright en las 15 pantallas + flujos interactivos
+      (editar ficha, togglear servidor/bautizado, registrar asistencia,
+      crear usuario, agregar joven). Se actualizó también el
+      `service-worker.js` (SHELL cacheaba `js/app.js`, que ya no existe).
 
 ## Pendiente — más adelante, sin bloqueo técnico inmediato
 

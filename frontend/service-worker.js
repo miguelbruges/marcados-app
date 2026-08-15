@@ -5,14 +5,24 @@
 // caché solo como respaldo sin conexión": cada despliegue se ve enseguida
 // apenas hay internet, y igual sigue funcionando si el celular se queda
 // sin señal en medio de una reunión.
-const CACHE = "marcados-shell-v2";
+// v3: app.js se separó en varios archivos por pantalla (auditoría
+// 2026-08-14) — el nombre de caché cambió para que el navegador no se
+// quede pegado con el SHELL viejo, que listaba "./js/app.js" (ya no
+// existe; cache.addAll() falla entero si un solo archivo de la lista da
+// 404, así que esto no era opcional).
+const CACHE = "marcados-shell-v3";
 const SHELL = [
   "./index.html",
   "./css/styles.css",
   "./js/api.js",
   "./js/matching-ui.js",
   "./js/router.js",
-  "./js/app.js",
+  "./js/app-core.js",
+  "./js/app-panel.js",
+  "./js/app-admin.js",
+  "./js/app-personas.js",
+  "./js/app-asistencia.js",
+  "./js/app-bootstrap.js",
   "./manifest.webmanifest",
 ];
 
