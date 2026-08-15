@@ -103,19 +103,25 @@ disco es efímero (ver más abajo). Para repetirla contra otro archivo:
 `backend/migration/import_excel.py` es una plantilla genérica anterior, sin
 usar; se mantiene solo como referencia histórica.
 
-## Cargar el Excel real en producción (sin acceso directo a la base)
+## Importar el Excel real en producción (sin acceso directo a la base)
 
-`POST /migracion/excel` (solo admin, multipart) sube el Excel real y corre
-la misma migración del script de línea de comandos, directo contra la base
-en vivo — pensado para cuando no hay forma de conectarse directo a la base
-de datos de producción (p.ej. Supabase) desde fuera. Flujo: `confirmar=false`
-(o sin el parámetro) es una vista previa que no escribe nada; `confirmar=true`
-escribe de verdad, y aun así se niega con 409 si la base ya tiene personas —
-nunca sobrescribe en silencio. La lógica de negocio (mapeo de columnas,
-validaciones, reglas de "no inventar datos") vive en un solo lugar,
-`app/services/migracion_excel.py`, compartida con `migration/migrar_datos_reales.py`
-(el script de CLI, para desarrollo local) — nunca hay dos copias que puedan
-desincronizarse. Pantalla en el panel (solo admin): "Cargar Excel real".
+`POST /migracion/importar` (solo admin, multipart) sube el Excel real y lo
+reconcilia contra la base en vivo, directo — pensado para cuando no hay forma
+de conectarse directo a la base de datos de producción (p.ej. Supabase) desde
+afuera. Un solo flujo, por ID único (columna A): a quien no existe todavía lo
+crea (igual que la migración inicial), y a quien ya existe y cambió lo
+actualiza campo por campo (queda en Bitácora) — sirve tanto para la primera
+carga en una base vacía como para cualquier sincronización posterior, cuando
+el Excel se edita por fuera de la app y hay que traer esos cambios adentro.
+Una celda en blanco nunca borra un dato ya cargado (excepto `servidor` y
+`bautizado`, que son NOT NULL). Flujo: `confirmar=false` (o sin el parámetro)
+es una vista previa que no escribe nada; `confirmar=true` escribe de verdad.
+La lógica de negocio (mapeo de columnas, validaciones, reglas de "no inventar
+datos") vive en un solo lugar, `app/services/migracion_excel.py`, compartida
+con `migration/migrar_datos_reales.py` (el script de CLI, para desarrollo
+local, que sigue siendo solo-creación y se niega si la base ya tiene
+personas). Pantalla en el panel (solo admin): Administración → Excel →
+"Importar Excel".
 
 ## Ficha completa y fichas incompletas
 
@@ -227,9 +233,9 @@ propia — no se puede hacer desde el asistente):
    `render.yaml`) y crea el esquema completo en Postgres — pero ver la nota
    sobre Alembic más arriba, no siempre corre de verdad; revisar los logs de
    Render tras el primer deploy.
-5. Cargar datos reales: `POST /migracion/excel` desde el panel de admin
-   ("Cargar Excel real"), o `migration/migrar_datos_reales.py` apuntando
-   `DATABASE_URL` a esa misma base.
+5. Cargar datos reales: `POST /migracion/importar` desde el panel de admin
+   (Administración → Excel → "Importar Excel"), o `migration/migrar_datos_reales.py`
+   apuntando `DATABASE_URL` a esa misma base.
 
 **Capa gratuita de Render:** el servicio duerme tras ~15 min de
 inactividad — el próximo pedido tarda 20-30s en despertar. Un pinger externo

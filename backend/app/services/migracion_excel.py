@@ -395,21 +395,48 @@ def _diferencias_fila(persona: Persona, fila: dict) -> dict[str, tuple[Any, Any]
     return cambios
 
 
-def comparar_actualizacion(db: Session, filas: list[dict]) -> dict[str, Any]:
-    """Compara filas leídas de un Excel (exportado y corregido a mano) contra
-    las personas existentes, por id_unico — NUNCA por nombre ni posición.
-    Solo lee y compara, no escribe nada."""
+def comparar_importacion(db: Session, filas: list[dict]) -> dict[str, Any]:
+    """Un solo flujo de importación (pedido del usuario, 2026-08-16): por
+    ID único, reconcilia contra lo que ya existe — actualiza lo que cambió
+    y prepara para crear lo que no existe todavía. Sirve tanto para la
+    primera carga (base vacía, todo se crea) como para cualquier
+    sincronización posterior (base ya poblada, se crea lo nuevo y se
+    actualiza lo que cambió) — antes eran dos flujos separados ("Cargar
+    datos iniciales" solo creaba y se negaba si ya había personas;
+    "Actualizar desde Excel" solo actualizaba). Solo lee y compara, no
+    escribe nada."""
     personas_por_id = {p.id_unico: p for p in db.query(Persona).all()}
-    coincidencias = []
-    sin_coincidencia = []
-    for f in filas:
-        persona = personas_por_id.get(f["id_unico"]) if f["id_unico"] else None
+    con_id = [f for f in filas if f["id_unico"]]
+
+    ids_vistos: dict[str, dict] = {}
+    ids_duplicados = []
+    for f in con_id:
+        if f["id_unico"] in ids_vistos:
+            ids_duplicados.append((ids_vistos[f["id_unico"]], f))
+        else:
+            ids_vistos[f["id_unico"]] = f
+
+    a_crear = []
+    a_actualizar = []
+    nuevas_sin_nombre = []
+    for f in con_id:
+        persona = personas_por_id.get(f["id_unico"])
         if not persona:
-            sin_coincidencia.append({"fila_excel": f["fila_excel"], "id_unico": f["id_unico"], "nombres": f["nombres"]})
+            # Fila nueva: acá sí hace falta un nombre — no hay con qué
+            # identificar a alguien que todavía no existe en la base.
+            if not f["nombres"]:
+                nuevas_sin_nombre.append(f)
+                continue
+            a_crear.append(
+                {"fila_excel": f["fila_excel"], "id_unico": f["id_unico"], "nombre_completo": f"{f['nombres']} {f['apellidos']}".strip()}
+            )
             continue
+        # Fila que actualiza a alguien que ya existe: un nombre en blanco
+        # es válido acá, significa "no lo toques" (misma regla que
+        # cualquier otro campo) — nunca debería bloquear la importación.
         cambios = _diferencias_fila(persona, f)
         if cambios:
-            coincidencias.append(
+            a_actualizar.append(
                 {
                     "id_unico": persona.id_unico,
                     "nombre_completo": persona.nombre_completo,
@@ -420,41 +447,140 @@ def comparar_actualizacion(db: Session, filas: list[dict]) -> dict[str, Any]:
                 }
             )
 
-    ids_en_excel = {f["id_unico"] for f in filas if f["id_unico"]}
+    ids_en_excel = {f["id_unico"] for f in con_id}
     sin_mencionar = [
         {"id_unico": p.id_unico, "nombre_completo": p.nombre_completo}
         for p in personas_por_id.values()
         if p.id_unico not in ids_en_excel
     ]
+
     return {
-        "personas_con_cambios": coincidencias,
-        "filas_sin_coincidencia": sin_coincidencia,
+        "sin_id": [f for f in filas if not f["id_unico"]],
+        "ids_duplicados": ids_duplicados,
+        "sin_nombre": nuevas_sin_nombre,
+        "a_crear": a_crear,
+        "a_actualizar": a_actualizar,
         "personas_sin_mencionar": sin_mencionar,
     }
 
 
-def aplicar_actualizacion(db: Session, filas: list[dict], usuario_id: int | None) -> dict[str, int]:
-    """Escribe los cambios detectados por comparar_actualizacion() — cada
-    campo tocado queda en la Bitácora con su valor anterior y nuevo."""
+def aplicar_importacion(
+    db: Session, filas: list[dict], catalogos: dict[str, list[str]], usuario_id: int | None
+) -> dict[str, int]:
+    """Escribe lo que detecta comparar_importacion(): actualiza personas
+    existentes (queda en Bitácora, campo por campo) y crea las que no
+    existían todavía (marcadas registro_historico=True, como cualquier
+    carga por Excel — con Seguimiento de revisión si falta Estado o si
+    comparte teléfono con otra persona nueva, igual que ejecutar_migracion)."""
     from app.services.bitacora import registrar_cambios
 
+    catalogos_creados = cargar_catalogos(db, catalogos)
+    db.flush()
+
     personas_por_id = {p.id_unico: p for p in db.query(Persona).all()}
+    nuevas_por_id: dict[str, Persona] = {}
+    personas_creadas = 0
     personas_actualizadas = 0
     campos_actualizados = 0
+    seguimientos_creados = 0
+
     for f in filas:
-        persona = personas_por_id.get(f["id_unico"]) if f["id_unico"] else None
-        if not persona:
+        if not f["id_unico"]:
             continue
-        cambios = _diferencias_fila(persona, f)
-        if not cambios:
+        persona = personas_por_id.get(f["id_unico"])
+        if persona:
+            cambios = _diferencias_fila(persona, f)
+            if not cambios:
+                continue
+            for campo, (_antes, despues) in cambios.items():
+                setattr(persona, campo, despues)
+            registrar_cambios(db, tabla="personas", registro_id=persona.id, usuario_id=usuario_id, cambios=cambios)
+            personas_actualizadas += 1
+            campos_actualizados += len(cambios)
             continue
-        for campo, (_antes, despues) in cambios.items():
-            setattr(persona, campo, despues)
-        registrar_cambios(db, tabla="personas", registro_id=persona.id, usuario_id=usuario_id, cambios=cambios)
-        personas_actualizadas += 1
-        campos_actualizados += len(cambios)
+
+        nueva = Persona(
+            id_unico=f["id_unico"],
+            nombres=f["nombres"],
+            apellidos=f["apellidos"],
+            genero=f["genero"],
+            fecha_nacimiento=f["fecha_nacimiento"],
+            edad_manual=f["edad_manual"] if isinstance(f["edad_manual"], int) else None,
+            estado=f["estado"],
+            servidor=f["servidor"],
+            bautizado=f["bautizado"],
+            estudio_biblico=f["estudio_biblico"],
+            telefono=f["telefono"],
+            correo_electronico=f["correo_electronico"],
+            tiene_instagram=f["tiene_instagram"],
+            instagram=f["instagram"],
+            tiene_facebook=f["tiene_facebook"],
+            facebook=f["facebook"],
+            direccion=f["direccion"],
+            contacto_emergencia=f["contacto_emergencia"],
+            parentesco=f["parentesco"],
+            telefono_emergencia=f["telefono_emergencia"],
+            grupo_sanguineo=f["grupo_sanguineo"],
+            eps=f["eps"],
+            talla=f["talla"],
+            como_llego=f["como_llego"],
+            notas=f["notas"],
+            fecha_ingreso=f["fecha_ingreso"],
+            fecha_bautismo=f["fecha_bautismo"],
+            fecha_inicio_servicio=f["fecha_inicio_servicio"],
+            registro_historico=True,
+        )
+        db.add(nueva)
+        db.flush()
+        nuevas_por_id[f["id_unico"]] = nueva
+        personas_creadas += 1
+        if not f["estado"]:
+            db.add(
+                Seguimiento(
+                    persona_id=nueva.id,
+                    tipo="revision",
+                    notas=(
+                        "Sin Estado definido (Activo/Inactivo/Fluctúa) al importar desde Excel — "
+                        "sin evidencia interna para inferirlo. Requiere decisión humana."
+                    ),
+                    requiere_atencion=True,
+                )
+            )
+            seguimientos_creados += 1
+
+    # Teléfono compartido: solo entre las recién creadas — a las que ya
+    # existían se les revisó esto la primera vez que entraron.
+    telefonos: dict[str, list[str]] = {}
+    for id_unico, persona in nuevas_por_id.items():
+        if persona.telefono:
+            telefonos.setdefault(persona.telefono, []).append(id_unico)
+    for tel, ids in telefonos.items():
+        if len(ids) < 2:
+            continue
+        for id_unico in ids:
+            persona = nuevas_por_id[id_unico]
+            otros = ", ".join(i for i in ids if i != id_unico)
+            db.add(
+                Seguimiento(
+                    persona_id=persona.id,
+                    tipo="revision",
+                    notas=(
+                        f"Posible duplicado: mismo teléfono ({tel}) que {otros}. "
+                        "NO fusionado automáticamente — requiere decisión humana."
+                    ),
+                    requiere_atencion=True,
+                )
+            )
+            seguimientos_creados += 1
+
     db.commit()
-    return {"personas_actualizadas": personas_actualizadas, "campos_actualizados": campos_actualizados}
+    return {
+        "catalogos_creados": catalogos_creados,
+        "personas_creadas": personas_creadas,
+        "personas_actualizadas": personas_actualizadas,
+        "campos_actualizados": campos_actualizados,
+        "seguimientos_creados": seguimientos_creados,
+    }
 
 
 def cargar_catalogos(db: Session, catalogos: dict[str, list[str]]) -> int:

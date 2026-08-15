@@ -19,15 +19,17 @@ Router.on("/admin", () => {
       </a>
       <a class="fila-admin" href="#/admin/excel">
         <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5a1 1 0 0 0 1 1h5"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9.5 12.5l2 4M11.5 12.5l-2 4"/></svg></span>
-        <span class="fila-admin-texto"><strong>Excel</strong><small>Descargar, subir plantilla, cargar datos iniciales o actualizar</small></span>
+        <span class="fila-admin-texto"><strong>Excel</strong><small>Descargar o importar el archivo real</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
     </div>
   `;
 });
 
-// --- Excel: reúne las 4 acciones relacionadas (antes eran 4 filas sueltas
-// en Administración, quedaba abarrotado — pedido del usuario, 2026-08-12) ---
+// --- Excel: exportar e importar (pedido del usuario, 2026-08-16): antes eran
+// 4 filas ("Descargar", "Actualizar desde Excel", "Cargar datos iniciales",
+// "Subir plantilla") — ahora quedan solo exportación e importación; la
+// plantilla se sube una sola vez y pasa a ser un link chico en la esquina. ---
 Router.on("/admin/excel", () => {
   if (!requiereSesion()) return;
   if (Api.rol() !== "admin") {
@@ -43,23 +45,14 @@ Router.on("/admin/excel", () => {
         <span class="fila-admin-texto"><strong>Descargar Excel</strong><small id="descargar-excel-sub">Exporta con el diseño del libro real</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
-      <a class="fila-admin" href="#/admin/actualizar-excel">
+      <a class="fila-admin" href="#/admin/importar-excel">
         <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 14-5.2M20 12a8 8 0 0 1-14 5.2"/><path d="M18 3v4h-4M6 21v-4h4"/></svg></span>
-        <span class="fila-admin-texto"><strong>Actualizar desde Excel</strong><small>Descargá, corregí en Excel y volvé a subirlo — actualiza solo lo que cambió</small></span>
-        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
-      </a>
-      <a class="fila-admin" href="#/admin/migracion">
-        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <span class="fila-admin-texto"><strong>Cargar datos iniciales</strong><small>Solo la primera vez — sube el Excel real para poblar la app. Se niega si ya hay personas</small></span>
-        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
-      </a>
-      <a class="fila-admin" href="#/admin/plantilla">
-        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
-        <span class="fila-admin-texto"><strong>Subir plantilla</strong><small>El libro real que se usa para "Descargar Excel" — se sube una sola vez</small></span>
+        <span class="fila-admin-texto"><strong>Importar Excel</strong><small>Editaste el Excel por fuera de la app — subilo y sincroniza: crea a quien no existe y actualiza a quien cambió</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
     </div>
     <div class="error" id="admin-error"></div>
+    <p class="hint" style="text-align:right;margin-top:1.5rem"><a href="#/admin/plantilla" id="link-plantilla">Plantilla: consultando...</a></p>
   `;
 
   document.getElementById("btn-exportar-excel").addEventListener("click", async (e) => {
@@ -85,10 +78,15 @@ Router.on("/admin/excel", () => {
   Api.estadoPlantilla()
     .then((estado) => {
       const sub = document.getElementById("descargar-excel-sub");
-      if (!sub) return;
-      sub.textContent = estado.configurada
-        ? "Exporta con el diseño del libro real"
-        : "Hace falta subir la plantilla primero (Subir plantilla)";
+      const link = document.getElementById("link-plantilla");
+      if (sub) {
+        sub.textContent = estado.configurada
+          ? "Exporta con el diseño del libro real"
+          : "Hace falta subir la plantilla primero (abajo)";
+      }
+      if (link) {
+        link.textContent = estado.configurada ? "Plantilla: cambiar" : "Plantilla: subir (hace falta para exportar)";
+      }
     })
     .catch(() => {});
 });
@@ -145,8 +143,12 @@ Router.on("/admin/plantilla", async () => {
   });
 });
 
-// --- Carga inicial: subir el Excel real (solo admin) ---
-Router.on("/admin/migracion", () => {
+// --- Importar Excel: un solo flujo (pedido del usuario, 2026-08-16) — antes
+// eran dos pantallas separadas ("Cargar datos iniciales", que se negaba si ya
+// había personas, y "Actualizar desde Excel", que nunca creaba). Por ID
+// único: crea a quien no existe todavía y actualiza campo por campo a quien
+// ya existe y cambió, en la misma subida. ---
+Router.on("/admin/importar-excel", () => {
   if (!requiereSesion()) return;
   if (Api.rol() !== "admin") {
     $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
@@ -154,111 +156,22 @@ Router.on("/admin/migracion", () => {
   }
   $app.innerHTML = `
     ${botonAtras("/admin/excel", "Excel")}
-    <h1>Cargar datos iniciales del Excel</h1>
-    <p class="hint">Solo para la primera vez: sube el archivo Excel real con los jóvenes para poblar la app. Primero se muestra una vista previa (no guarda nada) — recién con "Confirmar" se escribe en la base. Se niega a correr si ya hay personas cargadas.</p>
-    <label>Archivo (.xlsx)</label>
-    <input type="file" id="migracion-archivo" accept=".xlsx,.xlsm">
-    <button class="primary" id="btn-vista-previa" type="button">Ver vista previa</button>
-    <div id="migracion-reporte"></div>
-    <button class="primary" id="btn-confirmar" type="button" hidden>Confirmar migración real</button>
-    <div class="error" id="migracion-error"></div>
-  `;
-
-  function archivoElegido() {
-    const input = document.getElementById("migracion-archivo");
-    return input.files && input.files[0];
-  }
-
-  function pintarReporte(reporte) {
-    const cont = document.getElementById("migracion-reporte");
-    const btnConfirmar = document.getElementById("btn-confirmar");
-    if (reporte.error) {
-      cont.innerHTML = `<div class="error">${reporte.error}</div>`;
-      btnConfirmar.hidden = true;
-      return;
-    }
-    const catalogos = Object.entries(reporte.catalogos || {})
-      .map(([tipo, n]) => `${tipo}: ${n}`)
-      .join(", ");
-    const sinApellido = (reporte.sin_apellido || []).map((f) => `${f.id_unico} ${f.nombres}`).join(", ") || "ninguno";
-    const sinEstado = (reporte.sin_estado || []).map((f) => `${f.id_unico} ${f.nombre_completo}`).join(", ") || "ninguno";
-    const compartidos = Object.entries(reporte.telefonos_compartidos || {})
-      .map(([tel, nombres]) => `${tel}: ${nombres.join(", ")}`)
-      .join("<br>") || "ninguno";
-    cont.innerHTML = `
-      <div class="card">
-        <div><strong>Personas leídas:</strong> ${reporte.total_leidas}</div>
-        <div><strong>Catálogos:</strong> ${catalogos}</div>
-        <div class="hint"><strong>Sin apellido (no bloquea):</strong> ${sinApellido}</div>
-        <div class="hint"><strong>Sin Estado (queda marcado para revisión):</strong> ${sinEstado}</div>
-        <div class="hint"><strong>Teléfonos compartidos (quedan marcados para revisión):</strong><br>${compartidos}</div>
-        ${reporte.resultado ? `<div><strong>${reporte.mensaje}</strong> Personas creadas: ${reporte.resultado.personas_creadas}, catálogos: ${reporte.resultado.catalogos_creados}, seguimientos de revisión: ${reporte.resultado.seguimientos_creados}.</div>` : `<div class="hint">${reporte.mensaje || ""}</div>`}
-      </div>
-    `;
-    btnConfirmar.hidden = !!reporte.resultado; // ya se confirmó, no mostrar el botón de nuevo
-  }
-
-  document.getElementById("btn-vista-previa").addEventListener("click", async () => {
-    const archivo = archivoElegido();
-    const errorBox = document.getElementById("migracion-error");
-    errorBox.textContent = "";
-    if (!archivo) {
-      errorBox.textContent = "Elegí un archivo primero.";
-      return;
-    }
-    try {
-      const reporte = await Api.migrarExcel(archivo, false);
-      pintarReporte(reporte);
-    } catch (e) {
-      errorBox.textContent = e.message || "No se pudo leer el archivo.";
-    }
-  });
-
-  document.getElementById("btn-confirmar").addEventListener("click", async () => {
-    const archivo = archivoElegido();
-    const errorBox = document.getElementById("migracion-error");
-    errorBox.textContent = "";
-    if (!archivo) {
-      errorBox.textContent = "Elegí un archivo primero.";
-      return;
-    }
-    if (!confirm("¿Seguro? Esto escribe los jóvenes reales en la base de datos en vivo. No se puede deshacer desde acá.")) return;
-    try {
-      const reporte = await Api.migrarExcel(archivo, true);
-      pintarReporte(reporte);
-    } catch (e) {
-      errorBox.textContent = e.message || "No se pudo migrar.";
-    }
-  });
-});
-
-// --- Actualizar desde Excel: descargar, corregir, volver a subir (pedido
-// del usuario, 2026-08-12) — actualiza solo a quien coincide por ID único,
-// nunca crea ni borra personas por esta vía. ---
-Router.on("/admin/actualizar-excel", () => {
-  if (!requiereSesion()) return;
-  if (Api.rol() !== "admin") {
-    $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
-    return;
-  }
-  $app.innerHTML = `
-    ${botonAtras("/admin/excel", "Excel")}
-    <h1>Actualizar desde Excel</h1>
+    <h1>Importar Excel</h1>
     <p class="hint">
-      Descargá el Excel desde "Descargar Excel", corregí lo que haga falta ahí y subilo acá. Se actualiza solo a
-      quien coincida por ID único (columna A) con lo que cambió — nunca crea personas nuevas ni borra a nadie por
-      esta vía. Primero se muestra una vista previa (no guarda nada); recién con "Confirmar" se escribe.
+      Cuando el Excel se edita por fuera de la app y hay que traer esos cambios acá: subilo. Por ID único
+      (columna A) crea a quien todavía no existe y actualiza a quien ya existe y cambió — nunca borra a nadie.
+      Primero se muestra una vista previa (no guarda nada); recién con "Confirmar" se escribe.
     </p>
     <label>Archivo (.xlsx)</label>
-    <input type="file" id="actualizar-archivo" accept=".xlsx,.xlsm">
-    <button class="primary" id="btn-actualizar-vista-previa" type="button">Ver vista previa</button>
-    <div id="actualizar-reporte"></div>
-    <button class="primary" id="btn-actualizar-confirmar" type="button" hidden>Confirmar actualización</button>
-    <div class="error" id="actualizar-error"></div>
+    <input type="file" id="importar-archivo" accept=".xlsx,.xlsm">
+    <button class="primary" id="btn-importar-vista-previa" type="button">Ver vista previa</button>
+    <div id="importar-reporte"></div>
+    <button class="primary" id="btn-importar-confirmar" type="button" hidden>Confirmar importación</button>
+    <div class="error" id="importar-error"></div>
   `;
 
   function archivoElegido() {
-    const input = document.getElementById("actualizar-archivo");
+    const input = document.getElementById("importar-archivo");
     return input.files && input.files[0];
   }
 
@@ -274,7 +187,21 @@ Router.on("/admin/actualizar-excel", () => {
     estudio_biblico: "Estudio bíblico",
     telefono: "Teléfono",
     correo_electronico: "Correo electrónico",
+    tiene_instagram: "Tiene Instagram",
+    instagram: "Instagram",
+    tiene_facebook: "Tiene Facebook",
+    facebook: "Facebook",
     direccion: "Dirección",
+    contacto_emergencia: "Contacto de emergencia",
+    parentesco: "Parentesco",
+    telefono_emergencia: "Teléfono de emergencia",
+    grupo_sanguineo: "Grupo sanguíneo",
+    eps: "EPS",
+    talla: "Talla",
+    como_llego: "Cómo llegó",
+    fecha_ingreso: "Fecha de ingreso",
+    fecha_bautismo: "Fecha de bautismo",
+    fecha_inicio_servicio: "Fecha de inicio de servicio",
     notas: "Notas",
   };
 
@@ -289,14 +216,27 @@ Router.on("/admin/actualizar-excel", () => {
   }
 
   function pintarReporte(reporte) {
-    const cont = document.getElementById("actualizar-reporte");
-    const btnConfirmar = document.getElementById("btn-actualizar-confirmar");
-    const conCambios = reporte.personas_con_cambios || [];
-    const sinCoincidencia = reporte.filas_sin_coincidencia || [];
-    const sinMencionar = reporte.personas_sin_mencionar || [];
+    const cont = document.getElementById("importar-reporte");
+    const btnConfirmar = document.getElementById("btn-importar-confirmar");
+    if (reporte.error) {
+      cont.innerHTML = `<div class="error">${reporte.error}</div>`;
+      btnConfirmar.hidden = true;
+      return;
+    }
 
-    const listaCambios = conCambios.length
-      ? conCambios
+    const aCrear = reporte.a_crear || [];
+    const aActualizar = reporte.a_actualizar || [];
+    const sinMencionar = reporte.personas_sin_mencionar || [];
+    const catalogos = Object.entries(reporte.catalogos || {})
+      .map(([tipo, n]) => `${tipo}: ${n}`)
+      .join(", ");
+
+    const listaCrear = aCrear.length
+      ? `<ul class="kpi-lista">${aCrear.map((f) => `<li>${f.nombre_completo || "sin nombre"} <span class="hint">${f.id_unico}</span></li>`).join("")}</ul>`
+      : `<p class="hint">Nadie nuevo para crear.</p>`;
+
+    const listaActualizar = aActualizar.length
+      ? aActualizar
           .map(
             (p) => `
         <div class="card">
@@ -313,55 +253,55 @@ Router.on("/admin/actualizar-excel", () => {
       : `<p class="hint">Nadie tiene cambios.</p>`;
 
     cont.innerHTML = `
-      <h2>Cambios detectados (${conCambios.length})</h2>
-      ${listaCambios}
-      ${
-        sinCoincidencia.length
-          ? `<h2>Filas sin ID reconocido (${sinCoincidencia.length})</h2>
-             <p class="hint">No se tocan — revisá si el ID único de esas filas está bien escrito.</p>
-             <ul class="kpi-lista">${sinCoincidencia.map((f) => `<li>Fila ${f.fila_excel}: "${f.id_unico || "vacío"}" — ${f.nombres || "sin nombre"}</li>`).join("")}</ul>`
-          : ""
-      }
+      <h2>Nuevas personas a crear (${aCrear.length})</h2>
+      ${listaCrear}
+      <h2>Cambios detectados (${aActualizar.length})</h2>
+      ${listaActualizar}
+      <p class="hint"><strong>Catálogos:</strong> ${catalogos}</p>
       ${
         sinMencionar.length
           ? `<p class="hint">${sinMencionar.length} persona${sinMencionar.length === 1 ? "" : "s"} de la base no aparece${sinMencionar.length === 1 ? "" : "n"} en este Excel — no se les toca nada.</p>`
           : ""
       }
-      ${reporte.resultado ? `<div class="card"><strong>${reporte.mensaje}</strong></div>` : `<p class="hint">${reporte.mensaje || ""}</p>`}
+      ${
+        reporte.resultado
+          ? `<div class="card"><strong>${reporte.mensaje}</strong> Creadas: ${reporte.resultado.personas_creadas}, actualizadas: ${reporte.resultado.personas_actualizadas} (${reporte.resultado.campos_actualizados} campos), catálogos: ${reporte.resultado.catalogos_creados}, seguimientos de revisión: ${reporte.resultado.seguimientos_creados}.</div>`
+          : `<p class="hint">${reporte.mensaje || ""}</p>`
+      }
     `;
-    btnConfirmar.hidden = !conCambios.length || !!reporte.resultado;
+    btnConfirmar.hidden = (!aCrear.length && !aActualizar.length) || !!reporte.resultado;
   }
 
-  document.getElementById("btn-actualizar-vista-previa").addEventListener("click", async () => {
+  document.getElementById("btn-importar-vista-previa").addEventListener("click", async () => {
     const archivo = archivoElegido();
-    const errorBox = document.getElementById("actualizar-error");
+    const errorBox = document.getElementById("importar-error");
     errorBox.textContent = "";
     if (!archivo) {
       errorBox.textContent = "Elegí un archivo primero.";
       return;
     }
     try {
-      const reporte = await Api.actualizarDesdeExcel(archivo, false);
+      const reporte = await Api.importarExcel(archivo, false);
       pintarReporte(reporte);
     } catch (e) {
       errorBox.textContent = e.message || "No se pudo leer el archivo.";
     }
   });
 
-  document.getElementById("btn-actualizar-confirmar").addEventListener("click", async () => {
+  document.getElementById("btn-importar-confirmar").addEventListener("click", async () => {
     const archivo = archivoElegido();
-    const errorBox = document.getElementById("actualizar-error");
+    const errorBox = document.getElementById("importar-error");
     errorBox.textContent = "";
     if (!archivo) {
       errorBox.textContent = "Elegí un archivo primero.";
       return;
     }
-    if (!confirm("¿Seguro? Esto va a escribir estos cambios en la base de datos en vivo.")) return;
+    if (!confirm("¿Seguro? Esto va a crear y/o actualizar personas en la base de datos en vivo. No se puede deshacer desde acá.")) return;
     try {
-      const reporte = await Api.actualizarDesdeExcel(archivo, true);
+      const reporte = await Api.importarExcel(archivo, true);
       pintarReporte(reporte);
     } catch (e) {
-      errorBox.textContent = e.message || "No se pudo actualizar.";
+      errorBox.textContent = e.message || "No se pudo importar.";
     }
   });
 });
