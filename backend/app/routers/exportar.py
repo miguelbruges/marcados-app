@@ -69,7 +69,7 @@ def exportar_excel(db: Session = Depends(get_db), _admin: Usuario = Depends(requ
     else:
         raise HTTPException(
             status_code=503,
-            detail="No hay una plantilla de Excel configurada. Subila desde Administración → Descargar Excel.",
+            detail="No hay una plantilla de Excel configurada. Subila desde Administración → Excel → Subir plantilla.",
         )
 
     buffer = generar_export(db, origen)
