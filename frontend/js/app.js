@@ -875,6 +875,10 @@ Router.on("/personas", async () => {
         <span class="acceso-rapido-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/><path d="M8.5 14 6 21l6-3 6 3-2.5-7"/></svg></span>
         Ranking de invitaciones
       </a>
+      <a class="acceso-rapido" href="#/personas/pendientes-revision">
+        <span class="acceso-rapido-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        Pendientes por revisar
+      </a>
     </div>
     <div id="lista-personas" class="hint">Cargando...</div>
   `;
@@ -1361,6 +1365,46 @@ Router.on("/personas/incompletas", async () => {
     `
       )
       .join("");
+  } catch (e) {
+    $app.innerHTML += `<div class="error">${e.message}</div>`;
+  }
+});
+
+// --- Pendientes por revisar: servidor/bautizado se reiniciaron a False
+// para las 120 personas reales (pedido del usuario, 2026-08-13) — esto
+// ayuda al liderazgo a ir tachando la lista en vez de acordarse solo
+// (pedido del usuario, 2026-08-14). "Ya revisada" se detecta por la
+// Bitácora (¿alguien tocó servidor o bautizado desde la ficha?), no por
+// un campo nuevo. ---
+Router.on("/personas/pendientes-revision", async () => {
+  if (!requiereSesion()) return;
+  $app.innerHTML = `
+    ${botonAtras("/personas", "Jóvenes")}
+    <h1>Pendientes por revisar</h1>
+    <p class="hint">Servidor y Bautizado se reiniciaron para reconfirmarlos uno por uno — acá están los que todavía nadie tocó desde su ficha. Tocá un nombre para revisarlo.</p>
+    <div id="lista-pendientes" class="hint">Cargando...</div>
+  `;
+  try {
+    const personas = await Api.pendientesRevision();
+    const cont = document.getElementById("lista-pendientes");
+    if (!personas.length) {
+      cont.innerHTML = `<p class="hint">¡Listo! No queda nadie por revisar.</p>`;
+      return;
+    }
+    cont.innerHTML =
+      `<p class="hint"><strong>${personas.length}</strong> por revisar.</p>` +
+      personas
+        .map(
+          (p) => `
+      <a class="card-link" href="#/personas/ver?id=${p.id}">
+      <div class="card">
+        <strong>${p.nombre_completo}</strong>
+        <div class="hint">${p.id_unico}</div>
+      </div>
+      </a>
+    `
+        )
+        .join("");
   } catch (e) {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }

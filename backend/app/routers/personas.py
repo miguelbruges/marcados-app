@@ -8,7 +8,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user, require_acceso_pastoral
 from app.matching import buscar_candidatos
-from app.models import AreaServicio, Persona, PersonaArea, Usuario
+from app.models import AreaServicio, Bitacora, Persona, PersonaArea, Usuario
 from app.schemas import (
     AreaServicioOut,
     FichaIncompletaOut,
@@ -19,6 +19,7 @@ from app.schemas import (
     PersonaAreasUpdate,
     PersonaCreate,
     PersonaOut,
+    PersonaResumen,
     PersonaUpdate,
 )
 from app.services.alertas_asistencia import calcular_inasistencias_consecutivas, calcular_semaforo
@@ -45,13 +46,22 @@ def _con_relaciones_precargadas(q):
 @router.get("", response_model=list[PersonaOut])
 def listar_personas(
     activo: bool | None = Query(default=True),
+    # Opcionales, sin cambiar el comportamiento por defecto (auditoría
+    # 2026-08-14): con 120 personas reales no hace falta paginar todavía,
+    # pero si la app crece a todas las áreas de MARCADOS, esto ya está
+    # listo — solo falta que el frontend empiece a mandar estos parámetros.
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
     q = _con_relaciones_precargadas(select(Persona))
     if activo is not None:
         q = q.where(Persona.activo == activo)
-    return db.scalars(q.order_by(Persona.apellidos, Persona.nombres)).all()
+    q = q.order_by(Persona.apellidos, Persona.nombres)
+    if limit is not None:
+        q = q.offset(offset).limit(limit)
+    return db.scalars(q).all()
 
 
 @router.get("/fichas-incompletas", response_model=list[FichaIncompletaOut])
@@ -69,6 +79,28 @@ def listar_fichas_incompletas(
     incompletas = [p for p in personas if p.ficha_completa_pct < corte]
     incompletas.sort(key=lambda p: p.ficha_completa_pct)
     return incompletas
+
+
+@router.get("/pendientes-revision", response_model=list[PersonaResumen])
+def listar_pendientes_revision(db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """Personas a las que todavía nadie les tocó servidor o bautizado desde
+    la ficha (ni desde una actualización de Excel) — pedido del usuario,
+    2026-08-14, tras reiniciar ambos campos a False para las 120 personas
+    reales (2026-08-13) para reconfirmarlos uno por uno. Se apoya en la
+    Bitácora ya existente en vez de un campo nuevo: si existe algún registro
+    de auditoría de 'servidor' o 'bautizado' para esa persona, ya se
+    revisó — sin importar en qué haya quedado el valor. El reinicio en sí
+    fue un UPDATE directo (schema_guard), no pasó por acá, así que no cuenta
+    como revisión."""
+    revisados_ids = select(Bitacora.registro_id).where(
+        Bitacora.tabla == "personas",
+        Bitacora.campo.in_(["servidor", "bautizado"]),
+    )
+    return db.scalars(
+        select(Persona)
+        .where(Persona.activo == True, Persona.id.notin_(revisados_ids))  # noqa: E712
+        .order_by(Persona.apellidos, Persona.nombres)
+    ).all()
 
 
 @router.get("/invitaciones-resumen", response_model=list[InvitacionRankingOut])

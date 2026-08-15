@@ -17,6 +17,30 @@ def test_listar_personas_solo_activas_por_defecto(client, auth_headers):
     assert all(p["activo"] for p in resp.json())
 
 
+def test_listar_personas_sin_limit_devuelve_todas(client, auth_headers):
+    """Auditoría 2026-08-14: limit/offset son opcionales — sin mandarlos,
+    el comportamiento tiene que seguir siendo exactamente el de antes
+    (nadie en el frontend los manda todavía)."""
+    for i in range(3):
+        client.post("/personas", json={"nombres": f"P{i}", "apellidos": "Test"}, headers=auth_headers)
+
+    resp = client.get("/personas", headers=auth_headers)
+    assert resp.status_code == 200
+    assert len(resp.json()) == 3
+
+
+def test_listar_personas_respeta_limit_y_offset(client, auth_headers):
+    for i in range(5):
+        client.post("/personas", json={"nombres": f"P{i}", "apellidos": "Test"}, headers=auth_headers)
+
+    pagina1 = client.get("/personas", params={"limit": 2}, headers=auth_headers).json()
+    pagina2 = client.get("/personas", params={"limit": 2, "offset": 2}, headers=auth_headers).json()
+
+    assert len(pagina1) == 2
+    assert len(pagina2) == 2
+    assert {p["id"] for p in pagina1}.isdisjoint({p["id"] for p in pagina2})
+
+
 def test_buscar_coincidencias_endpoint(client, auth_headers):
     client.post("/personas", json={"nombres": "Sofia", "apellidos": "Hernandez Martinez"}, headers=auth_headers)
     client.post("/personas", json={"nombres": "Camila", "apellidos": "Rodriguez Perez"}, headers=auth_headers)
@@ -199,3 +223,33 @@ def test_editar_persona_registra_bitacora_solo_de_lo_que_cambio(client, auth_hea
     assert registro.valor_anterior == "3000000000"
     assert registro.valor_nuevo == "3009999999"
     assert registro.tabla == "personas"
+
+
+def test_pendientes_revision_lista_a_quien_nunca_se_le_toco_servidor_ni_bautizado(client, auth_headers):
+    """Pedido del usuario, 2026-08-14, tras el reinicio de servidor/bautizado
+    a False (2026-08-13): usa la Bitácora ya existente para saber a quién
+    ya se revisó, sin necesitar un campo nuevo."""
+    p1 = client.post("/personas", json={"nombres": "Sin", "apellidos": "Revisar"}, headers=auth_headers).json()
+    p2 = client.post("/personas", json={"nombres": "Ya", "apellidos": "Revisada"}, headers=auth_headers).json()
+
+    pendientes = client.get("/personas/pendientes-revision", headers=auth_headers).json()
+    ids_pendientes = {p["id"] for p in pendientes}
+    assert p1["id"] in ids_pendientes
+    assert p2["id"] in ids_pendientes  # todavía ninguna de las dos fue tocada
+
+    # tocar bautizado (aunque el valor termine siendo el mismo False -> False
+    # no genera fila en Bitácora, así que hay que cambiarlo de verdad)
+    client.patch(f"/personas/{p2['id']}", json={"bautizado": True}, headers=auth_headers)
+
+    pendientes = client.get("/personas/pendientes-revision", headers=auth_headers).json()
+    ids_pendientes = {p["id"] for p in pendientes}
+    assert p1["id"] in ids_pendientes
+    assert p2["id"] not in ids_pendientes  # ya se revisó, sale de la lista
+
+
+def test_pendientes_revision_cuenta_marcar_servidor_como_revision(client, auth_headers):
+    persona = client.post("/personas", json={"nombres": "Nueva", "apellidos": "Servidora"}, headers=auth_headers).json()
+    client.post(f"/personas/{persona['id']}/marcar-servidor", json={}, headers=auth_headers)
+
+    pendientes = client.get("/personas/pendientes-revision", headers=auth_headers).json()
+    assert persona["id"] not in {p["id"] for p in pendientes}

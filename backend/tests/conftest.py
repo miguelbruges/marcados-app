@@ -12,6 +12,18 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import RolUsuario, Usuario
 from app.security import hash_password
+from app.services.rate_limit import limpiar_todo
+
+
+@pytest.fixture(autouse=True)
+def _sin_rate_limit_entre_tests():
+    # El freno de intentos de login (app/services/rate_limit.py) vive en
+    # memoria del proceso, no de la base de datos de cada test — sin esto,
+    # un test que falla el login varias veces con el mismo email bloquearía
+    # a otros tests que reusen ese email.
+    limpiar_todo()
+    yield
+    limpiar_todo()
 
 
 @pytest.fixture()

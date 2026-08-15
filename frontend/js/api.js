@@ -76,6 +76,7 @@ const Api = (() => {
     marcarServidor: (personaId, fecha_inicio_servicio) =>
       request(`/personas/${personaId}/marcar-servidor`, { method: "POST", body: { fecha_inicio_servicio } }),
     fichasIncompletas: () => request("/personas/fichas-incompletas"),
+    pendientesRevision: () => request("/personas/pendientes-revision"),
     invitacionesResumen: (periodo) => request(`/personas/invitaciones-resumen?periodo=${periodo}`),
     areasServicio: () => request("/areas-servicio"),
     actualizarAreasPersona: (personaId, areaIds) =>
