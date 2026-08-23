@@ -23,10 +23,147 @@ Router.on("/asistencia", async () => {
     <input type="date" id="asis-fecha" value="${new Date().toISOString().slice(0, 10)}">
     <button class="primary" id="asis-iniciar">Iniciar registro</button>
     <div id="asis-body"></div>
+    <h2 style="margin-top:1.6rem">Ver asistencia por día</h2>
+    <div id="asis-calendario-slot"></div>
   `;
   wireOtroManual("asis-actividad", "asis-otro-slot");
   document.getElementById("asis-iniciar").addEventListener("click", iniciarRegistroAsistencia);
+  document.getElementById("asis-calendario-slot").appendChild(crearCalendarioAsistencia());
 });
+
+// --- Calendario pequeño y permanente: elegir un día y ver quién asistió
+// (pedido del usuario, 2026-08-23) — separado del flujo de registro (que
+// sigue siendo "hoy hacia adelante"); esto es para consultar el historial. ---
+function crearCalendarioAsistencia() {
+  const MESES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+  const DIAS_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const fechaLocal = (anio, mesIdx, dia) => `${anio}-${pad(mesIdx + 1)}-${pad(dia)}`;
+
+  const cont = document.createElement("div");
+  cont.className = "card calendario-asistencia";
+  const hoy = new Date();
+  const fechaHoy = fechaLocal(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  let anioActual = hoy.getFullYear();
+  let mesActual = hoy.getMonth();
+  let diaSeleccionado = fechaHoy;
+  let tokenVigente = null;
+
+  async function render() {
+    const miToken = (tokenVigente = {});
+    cont.innerHTML = `<p class="hint">Cargando calendario...</p>`;
+    const ultimoDia = new Date(anioActual, mesActual + 1, 0).getDate();
+    const desde = fechaLocal(anioActual, mesActual, 1);
+    const hasta = fechaLocal(anioActual, mesActual, ultimoDia);
+
+    let eventosMes = [];
+    try {
+      eventosMes = await Api.eventosPorRango(desde, hasta);
+    } catch (e) {
+      if (tokenVigente !== miToken) return;
+      cont.innerHTML = `<div class="error">${e.message}</div>`;
+      return;
+    }
+    if (tokenVigente !== miToken) return;
+    const fechasConEventos = new Set(eventosMes.map((ev) => ev.fecha));
+
+    const primerDiaSemana = (new Date(anioActual, mesActual, 1).getDay() + 6) % 7; // 0 = lunes
+    const celdas = Array(primerDiaSemana).fill(null);
+    for (let d = 1; d <= ultimoDia; d++) celdas.push(d);
+
+    cont.innerHTML = `
+      <div class="calendario-header">
+        <button type="button" class="tap-btn" id="cal-prev" aria-label="Mes anterior">‹</button>
+        <strong>${MESES[mesActual]} ${anioActual}</strong>
+        <button type="button" class="tap-btn" id="cal-next" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="calendario-dias-semana">${DIAS_SEMANA.map((d) => `<span>${d}</span>`).join("")}</div>
+      <div class="calendario-grilla">
+        ${celdas
+          .map((d) => {
+            if (!d) return `<span class="calendario-celda vacia"></span>`;
+            const fecha = fechaLocal(anioActual, mesActual, d);
+            const clases = [
+              "calendario-celda",
+              fechasConEventos.has(fecha) ? "con-evento" : "",
+              fecha === diaSeleccionado ? "seleccionada" : "",
+              fecha === fechaHoy ? "hoy" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return `<button type="button" class="${clases}" data-fecha="${fecha}">${d}</button>`;
+          })
+          .join("")}
+      </div>
+      <div id="calendario-detalle"></div>
+    `;
+
+    document.getElementById("cal-prev").addEventListener("click", () => {
+      mesActual--;
+      if (mesActual < 0) {
+        mesActual = 11;
+        anioActual--;
+      }
+      render();
+    });
+    document.getElementById("cal-next").addEventListener("click", () => {
+      mesActual++;
+      if (mesActual > 11) {
+        mesActual = 0;
+        anioActual++;
+      }
+      render();
+    });
+    cont.querySelectorAll(".calendario-celda[data-fecha]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        diaSeleccionado = btn.dataset.fecha;
+        cont.querySelectorAll(".calendario-celda").forEach((b) => b.classList.remove("seleccionada"));
+        btn.classList.add("seleccionada");
+        mostrarDetalleDia(diaSeleccionado);
+      });
+    });
+
+    mostrarDetalleDia(diaSeleccionado);
+  }
+
+  async function mostrarDetalleDia(fecha) {
+    const detalle = document.getElementById("calendario-detalle");
+    if (!detalle) return;
+    detalle.innerHTML = `<p class="hint">Cargando asistencia del ${fecha}...</p>`;
+    try {
+      const eventosDia = await Api.eventosPorRango(fecha, fecha);
+      if (!eventosDia.length) {
+        detalle.innerHTML = `<p class="hint">No hay ninguna actividad registrada el ${fecha}.</p>`;
+        return;
+      }
+      const bloques = await Promise.all(
+        eventosDia.map(async (ev) => {
+          const asistentes = await Api.verAsistenciaEvento(ev.id);
+          const nombres = asistentes.length
+            ? asistentes.map((a) => `<li>${a.persona_nombre}</li>`).join("")
+            : `<li class="hint">Nadie registrado.</li>`;
+          return `
+            <div class="card">
+              <strong>${ev.nombre}</strong>
+              <span class="hint">${asistentes.length} asistente${asistentes.length === 1 ? "" : "s"}</span>
+              <ul class="kpi-lista">${nombres}</ul>
+            </div>
+          `;
+        })
+      );
+      detalle.innerHTML = bloques.join("");
+    } catch (e) {
+      detalle.innerHTML = `<div class="error">${e.message}</div>`;
+    }
+  }
+
+  render();
+  return cont;
+}
 
 // Detección de 2da visita (Batch C, pedido del usuario): la primera vez
 // que alguien asiste su ficha suele estar casi vacía — recién es evidente
@@ -206,20 +343,44 @@ async function procesarListaImportada() {
 
   document.getElementById("imp-guardar").addEventListener("click", async () => {
     const seleccionados = new Set();
-    document.querySelectorAll('#imp-resultado input[type=radio]:checked').forEach((input) => {
-      if (input.value) seleccionados.add(Number(input.value));
+    const ignorados = [];
+    // Antes esto solo miraba qué radios quedaron tildados en "sí" — a una
+    // línea "Pendiente por confirmar" que nadie tocó le queda tildado por
+    // defecto "Ignorar esta línea", y se guardaba así sin avisar: de una
+    // lista de 30+ nombres pegada, solo las de ALTA confianza (matcheo
+    // automático) quedaban guardadas, y el resto desaparecía en silencio —
+    // "se tomó asistencia pero no se refleja" (pedido del usuario, 2026-08-23).
+    // Ahora se cuentan explícitamente y se avisa antes de guardar.
+    preview.filas.forEach((fila, idx) => {
+      const marcado = document.querySelector(`#imp-resultado input[name="fila-${idx}"]:checked`);
+      const valor = marcado ? marcado.value : "";
+      if (valor) {
+        seleccionados.add(Number(valor));
+      } else {
+        ignorados.push(fila.texto_original);
+      }
     });
     const $out = document.getElementById("imp-guardar-resultado");
     if (!seleccionados.size) {
       $out.innerHTML = `<p class="hint">No hay nadie seleccionado para guardar.</p>`;
       return;
     }
+    if (ignorados.length) {
+      const lista = ignorados.map((t) => `• ${t}`).join("\n");
+      const continuar = confirm(
+        `Se van a guardar ${seleccionados.size} y se van a IGNORAR ${ignorados.length} línea${ignorados.length === 1 ? "" : "s"} sin confirmar (no van a quedar registradas):\n\n${lista}\n\n¿Continuar de todos modos?`
+      );
+      if (!continuar) return;
+    }
     try {
       const r = await Api.confirmarImportarLista({
         evento_id: preview.evento.id,
         persona_ids: [...seleccionados],
       });
-      $out.innerHTML = `<div class="card">Guardados: ${r.guardados} · Ya estaban registrados: ${r.ya_registrados}</div>`;
+      const avisoIgnorados = ignorados.length
+        ? ` · Ignorados sin confirmar: ${ignorados.length} (${ignorados.join(", ")})`
+        : "";
+      $out.innerHTML = `<div class="card">Guardados: ${r.guardados} · Ya estaban registrados: ${r.ya_registrados}${avisoIgnorados}</div>`;
     } catch (e) {
       $out.innerHTML = `<div class="error">${e.message}</div>`;
     }

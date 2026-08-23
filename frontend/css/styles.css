@@ -660,3 +660,59 @@ button.secundario {
   border-bottom: 1px solid var(--borde);
   font-size: 0.9rem;
 }
+
+/* --- Calendario de asistencia: chico y permanente en /asistencia, para
+   ver quién asistió un día puntual sin tener que armar un nuevo registro
+   (pedido del usuario, 2026-08-23) --- */
+.calendario-asistencia { padding: 0.9rem; }
+.calendario-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+  font-family: var(--display);
+}
+.calendario-header .tap-btn { padding: 0.25rem 0.65rem; font-size: 1rem; line-height: 1; }
+.calendario-dias-semana {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+  margin-bottom: 0.2rem;
+}
+.calendario-grilla {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+}
+.calendario-celda {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--texto);
+  cursor: pointer;
+  position: relative;
+}
+.calendario-celda.vacia { cursor: default; }
+.calendario-celda.con-evento::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--acento-2);
+}
+.calendario-celda.hoy { border: 1.5px solid var(--morado-500); }
+.calendario-celda.seleccionada { background: var(--morado-600); color: white; }
+.calendario-celda.seleccionada.con-evento::after { background: white; }
+#calendario-detalle { margin-top: 0.8rem; }
+#calendario-detalle .card { margin-bottom: 0.6rem; }

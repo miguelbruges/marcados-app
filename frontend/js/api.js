@@ -88,7 +88,7 @@ const Api = (() => {
 
     actividades: () => request("/actividades"),
     crearOReusarEvento: (data) => request("/eventos", { method: "POST", body: data }),
-    listarEventos: () => request("/eventos"),
+    eventosPorRango: (desde, hasta) => request(`/eventos?desde=${desde}&hasta=${hasta}`),
     registrarAsistencia: (data) => request("/asistencia", { method: "POST", body: data }),
     verAsistenciaEvento: (eventoId) => request(`/eventos/${eventoId}/asistencia`),
     quitarAsistencia: (id) => request(`/asistencia/${id}`, { method: "DELETE" }),
