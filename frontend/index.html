@@ -43,6 +43,13 @@
   </div>
 </header>
 
+<!-- Vista por rol (solo admin): se queda fijo arriba mientras dure, para
+     que nunca se confunda con la vista real ni quede activo sin querer. -->
+<div id="banner-vista-rol" class="banner-vista-rol" hidden>
+  <span>Estás viendo la app como <strong id="banner-vista-rol-nombre">—</strong></span>
+  <button id="btn-salir-vista-rol" type="button">Volver a mi vista</button>
+</div>
+
 <main id="app" class="app"></main>
 
 <nav id="tabbar" class="tabbar" hidden>

@@ -22,6 +22,28 @@ const Api = (() => {
     localStorage.removeItem("marcados_token");
     localStorage.removeItem("marcados_rol");
     localStorage.removeItem("marcados_nombre");
+    localStorage.removeItem(LS_VISTA_ROL);
+  }
+
+  // --- "Ver la app como…" (pedido del usuario, 2026-08-24) ---
+  // Solo cambia lo que la interfaz MUESTRA: el token sigue siendo el del
+  // admin, así que esto no prueba los permisos del backend, sirve para ver
+  // cómo le queda la pantalla a cada rol. Es seguro justamente porque solo
+  // puede QUITAR interfaz, nunca agregar: el backend decide aparte y ahí
+  // el admin sigue siendo admin.
+  const LS_VISTA_ROL = "marcados_vista_rol";
+  const ROLES_QUE_SE_PUEDEN_VER = ["lider", "encargado", "consolidacion"];
+
+  function rolReal() {
+    return localStorage.getItem("marcados_rol");
+  }
+
+  function rolVista() {
+    const vista = localStorage.getItem(LS_VISTA_ROL);
+    // Solo un admin de verdad puede estar en modo vista. Si el rol real
+    // cambió (otra sesión, otro usuario), la vista guardada se ignora.
+    if (!vista || rolReal() !== "admin") return null;
+    return ROLES_QUE_SE_PUEDEN_VER.includes(vista) ? vista : null;
   }
 
   async function request(path, { method = "GET", body, auth = true } = {}) {
@@ -57,7 +79,19 @@ const Api = (() => {
     login: (email, password) => request("/auth/login", { method: "POST", body: { email, password }, auth: false }),
     logout: clearSession,
     isAuthenticated: () => !!token(),
-    rol: () => localStorage.getItem("marcados_rol"),
+    // rol() es el rol EFECTIVO para la interfaz: si el admin está mirando
+    // la app "como" otro rol, devuelve ese. Todas las pantallas ya se
+    // guardan con esto, así que la vista previa sale gratis y fiel.
+    rol: () => rolVista() || rolReal(),
+    rolReal,
+    rolVista,
+    rolesQueSePuedenVer: () => [...ROLES_QUE_SE_PUEDEN_VER],
+    verComoRol(rol) {
+      if (rolReal() !== "admin") throw new Error("Solo un administrador puede usar la vista por rol.");
+      if (!ROLES_QUE_SE_PUEDEN_VER.includes(rol)) throw new Error(`Rol desconocido: ${rol}`);
+      localStorage.setItem(LS_VISTA_ROL, rol);
+    },
+    salirDeVistaRol: () => localStorage.removeItem(LS_VISTA_ROL),
     nombre: () => localStorage.getItem("marcados_nombre"),
     setSession,
 

@@ -66,6 +66,36 @@ function tieneAccesoPastoral() {
   return ["admin", "lider", "encargado"].includes(Api.rol());
 }
 
+const NOMBRE_ROL = {
+  admin: "Administrador",
+  lider: "Líder",
+  encargado: "Encargado de área",
+  consolidacion: "Consolidación",
+};
+
+// El banner vive fuera de #app (que se reescribe entero en cada pantalla),
+// así que hay que refrescarlo en cada navegación — requiereSesion() lo
+// llama toda ruta que necesite sesión.
+function actualizarBannerVistaRol() {
+  const banner = document.getElementById("banner-vista-rol");
+  if (!banner) return;
+  const vista = Api.rolVista();
+  banner.hidden = !vista;
+  if (vista) {
+    document.getElementById("banner-vista-rol-nombre").textContent = NOMBRE_ROL[vista] || vista;
+  }
+}
+
+document.getElementById("btn-salir-vista-rol").addEventListener("click", () => {
+  Api.salirDeVistaRol();
+  // Recarga completa a propósito: la campanita, el engranaje de admin y
+  // los datos que cada pantalla decidió NO pedir según el rol quedaron
+  // resueltos al dibujarse. Volver a la vista real sin recargar dejaría
+  // media interfaz con el estado de la vista prestada.
+  location.hash = "#/panel";
+  location.reload();
+});
+
 function requiereSesion() {
   if (!Api.isAuthenticated()) {
     Router.navegar("/login");
@@ -73,15 +103,17 @@ function requiereSesion() {
   }
   $tabbar.hidden = false;
   $btnSalir.hidden = false;
+  actualizarBannerVistaRol();
   return true;
 }
 
 $btnSalir.addEventListener("click", () => {
-  Api.logout();
+  Api.logout(); // borra también la vista por rol, si estaba activa
   $tabbar.hidden = true;
   $btnSalir.hidden = true;
   $btnAdminGear.hidden = true;
   $btnAlertas.hidden = true;
+  actualizarBannerVistaRol();
   Router.navegar("/login");
 });
 

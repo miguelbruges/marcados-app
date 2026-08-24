@@ -22,8 +22,74 @@ Router.on("/admin", () => {
         <span class="fila-admin-texto"><strong>Excel</strong><small>Descargar o importar el archivo real</small></span>
         <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
       </a>
+      <a class="fila-admin" href="#/admin/ver-como">
+        <span class="fila-admin-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="2.6"/></svg></span>
+        <span class="fila-admin-texto"><strong>Ver la app como…</strong><small>Mirar la pantalla tal cual la ve un líder, un encargado o consolidación</small></span>
+        <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+      </a>
     </div>
   `;
+});
+
+// --- Ver la app como otro rol (pedido del usuario, 2026-08-24) ---
+// Cambia SOLO lo que la interfaz muestra: el token sigue siendo el del
+// admin, así que no es una prueba de los permisos del backend — es para
+// ver cómo le queda la pantalla a cada rol. Se puede confiar en que no
+// abre nada de más justamente porque solo puede esconder interfaz.
+Router.on("/admin/ver-como", () => {
+  if (!requiereSesion()) return;
+  if (Api.rol() !== "admin") {
+    $app.innerHTML = `<p class="error">Esta sección es solo para administradores.</p>`;
+    return;
+  }
+  const QUE_VE = {
+    lider: "Todo lo pastoral (semáforo, seguimiento, alertas) pero nada de Administración. Hoy ve exactamente lo mismo que un encargado.",
+    encargado: "Todo lo pastoral (semáforo, seguimiento, alertas) pero nada de Administración.",
+    consolidacion: "Panel, jóvenes, fichas y asistencia. NO ve el semáforo, el seguimiento pastoral ni la campanita de alertas.",
+  };
+  $app.innerHTML = `
+    ${botonAtras("/admin", "Administración")}
+    <h1>Ver la app como…</h1>
+    <p class="hint">
+      Para revisar cómo le queda la pantalla a cada rol sin tener que entrar con otra cuenta. Mientras dure,
+      una franja naranja arriba te lo recuerda y te deja volver a tu vista cuando quieras.
+    </p>
+    <p class="aclaracion">
+      Ojo: esto cambia lo que <strong>se muestra</strong>, no tus permisos. Tu sesión sigue siendo de admin,
+      así que no sirve para comprobar que el servidor bloquee lo que tiene que bloquear — eso ya lo hace el
+      backend por su cuenta, aparte de la interfaz.
+    </p>
+    <div class="lista-admin">
+      ${Api.rolesQueSePuedenVer()
+        .map(
+          (rol) => `
+        <a class="fila-admin" href="#" data-ver-rol="${rol}">
+          <span class="fila-admin-texto"><strong>${NOMBRE_ROL[rol]}</strong><small>${QUE_VE[rol]}</small></span>
+          <span class="fila-admin-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>
+        </a>
+      `
+        )
+        .join("")}
+    </div>
+    <div class="error" id="ver-como-error"></div>
+  `;
+
+  $app.querySelectorAll("[data-ver-rol]").forEach((fila) => {
+    fila.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        Api.verComoRol(fila.dataset.verRol);
+      } catch (err) {
+        document.getElementById("ver-como-error").textContent = err.message;
+        return;
+      }
+      // Recarga completa: cada pantalla decide al dibujarse qué pedir y qué
+      // mostrar según el rol, así que la vista prestada tiene que arrancar
+      // de cero para ser fiel.
+      location.hash = "#/panel";
+      location.reload();
+    });
+  });
 });
 
 // --- Excel: exportar e importar (pedido del usuario, 2026-08-16): antes eran
