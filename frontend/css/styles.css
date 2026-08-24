@@ -665,6 +665,9 @@ button.secundario {
    ver quién asistió un día puntual sin tener que armar un nuevo registro
    (pedido del usuario, 2026-08-23) --- */
 .calendario-asistencia { padding: 0.9rem; }
+/* La grilla se queda chica y centrada: con celdas cuadradas al ancho
+   completo, en pantalla de escritorio el calendario ocupaba media página. */
+.calendario-cuerpo { max-width: 20rem; margin: 0 auto; }
 .calendario-header {
   display: flex;
   align-items: center;
@@ -716,3 +719,24 @@ button.secundario {
 .calendario-celda.seleccionada.con-evento::after { background: white; }
 #calendario-detalle { margin-top: 0.8rem; }
 #calendario-detalle .card { margin-bottom: 0.6rem; }
+/* Lista editable del día: cada asistente con su ✕ para quitarlo. */
+.lista-dia li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.lista-dia .quitar-asis {
+  border: none;
+  background: var(--rojo-fondo);
+  color: var(--rojo);
+  border-radius: 8px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex: none;
+}
+.agregar-al-dia { margin-top: 0.6rem; }
+.agregar-al-dia .buscador-input { margin-bottom: 0; }
+#calendario-detalle .sel-actividad-dia { margin-bottom: 0.5rem; }

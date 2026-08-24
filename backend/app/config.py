@@ -25,10 +25,15 @@ class Settings(BaseSettings):
     alertas_umbral_verde: float = 0.85
     alertas_umbral_amarillo: float = 0.50
     # Con menos reuniones "contadas para el semáforo" que esto dentro de la
-    # ventana, no se asigna color — un solo dato no es un patrón (pedido del
-    # usuario, 2026-08-12: con 1 sola asistencia el sistema mostraba verde
-    # sin que eso significara nada confiable).
-    alertas_minimo_eventos: int = 2
+    # ventana, no se asigna color. Estuvo en 2 (pedido del usuario,
+    # 2026-08-12: con una sola asistencia el sistema mostraba verde sin que
+    # eso significara nada confiable), pero el grupo se reúne una vez por
+    # semana: exigir 2 reuniones dejaba períodos enteros en "sin datos".
+    # Baja a 1 por pedido del usuario (2026-08-24) — mejor un color sobre
+    # una sola reunión que la pantalla vacía. El riesgo de leer de más un
+    # dato aislado sigue existiendo, y por eso este semáforo nunca es una
+    # conclusión pastoral: la decisión siempre la toma una persona.
+    alertas_minimo_eventos: int = 1
     # Bot de Telegram de solo consulta (sección 19 del handoff). Sin este
     # token el webhook responde 503 en vez de fallar de forma confusa — se
     # obtiene hablándole a @BotFather en Telegram, nunca vive en el repo.

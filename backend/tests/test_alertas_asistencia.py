@@ -113,11 +113,12 @@ def test_resumen_niveles_cuenta_por_nivel(db_session):
     assert resumen == {"verde": 1, "amarillo": 0, "rojo": 1, "sin_datos": 0}
 
 
-def test_resumen_niveles_sin_datos_si_no_alcanzan_las_reuniones_minimas(db_session):
-    # Antes: una sola asistencia daba 100% / verde, sin que eso significara
-    # nada confiable (justo el caso que reportó el usuario). Ahora, con
-    # menos reuniones que el mínimo configurado (2 por defecto), no se
-    # asigna color todavía.
+def test_resumen_niveles_con_una_sola_reunion_ya_asigna_color(db_session):
+    # El mínimo por defecto pasó de 2 a 1 (pedido del usuario, 2026-08-24):
+    # el grupo se reúne una vez por semana, y exigir 2 reuniones dejaba
+    # períodos enteros en "sin datos". Con una sola reunión ya se asigna
+    # color — leerlo con pinzas es responsabilidad de quien lo mira, el
+    # semáforo nunca es una conclusión pastoral.
     actividad = _actividad(db_session)
     persona = _crear_persona(db_session)
     evento = _crear_evento(db_session, 1, actividad)
@@ -125,7 +126,31 @@ def test_resumen_niveles_sin_datos_si_no_alcanzan_las_reuniones_minimas(db_sessi
     db_session.commit()
 
     resumen = resumen_niveles(db_session)
+    assert resumen == {"verde": 1, "amarillo": 0, "rojo": 0, "sin_datos": 0}
+
+
+def test_resumen_niveles_sin_datos_solo_si_no_hubo_ninguna_reunion(db_session):
+    # "Sin datos" ahora significa exactamente eso: en la ventana no hubo
+    # ningún Encuentro cargado. No que a esta persona le falte historial.
+    _crear_persona(db_session)
+    db_session.commit()
+
+    resumen = resumen_niveles(db_session)
     assert resumen == {"verde": 0, "amarillo": 0, "rojo": 0, "sin_datos": 1}
+
+
+def test_minimo_eventos_sigue_siendo_configurable(db_session):
+    # El umbral bajó por defecto, pero la perilla sigue existiendo: quien
+    # quiera exigir más reuniones antes de mostrar color puede subirla.
+    actividad = _actividad(db_session)
+    persona = _crear_persona(db_session)
+    evento = _crear_evento(db_session, 1, actividad)
+    db_session.add(Asistencia(persona_id=persona.id, evento_id=evento.id, presente=True))
+    db_session.commit()
+
+    resultado = calcular_semaforo(db_session, persona.id, minimo_eventos=2)
+    assert resultado.nivel == "sin_datos"
+    assert resultado.porcentaje is None
 
 
 def test_actividad_que_no_cuenta_para_semaforo_no_afecta_el_calculo(db_session):

@@ -28,18 +28,22 @@ Router.on("/asistencia", async () => {
   `;
   wireOtroManual("asis-actividad", "asis-otro-slot");
   document.getElementById("asis-iniciar").addEventListener("click", iniciarRegistroAsistencia);
-  document.getElementById("asis-calendario-slot").appendChild(crearCalendarioAsistencia());
+  document.getElementById("asis-calendario-slot").appendChild(crearCalendarioAsistencia(actividades));
 });
 
 // --- Calendario pequeño y permanente: elegir un día y ver quién asistió
 // (pedido del usuario, 2026-08-23) — separado del flujo de registro (que
 // sigue siendo "hoy hacia adelante"); esto es para consultar el historial. ---
-function crearCalendarioAsistencia() {
+function crearCalendarioAsistencia(actividades) {
   const MESES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
   ];
-  const DIAS_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
+  // Dos letras, no una: con "L M M J V S D" el navegador leía cada "M"
+  // suelta como una abreviatura y la expandía a "METRO" en pantalla
+  // (bug real reportado por el usuario, 2026-08-24). Además "Ma"/"Mi"
+  // distingue martes de miércoles, que con una sola letra era imposible.
+  const DIAS_SEMANA = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
 
   const pad = (n) => String(n).padStart(2, "0");
   const fechaLocal = (anio, mesIdx, dia) => `${anio}-${pad(mesIdx + 1)}-${pad(dia)}`;
@@ -76,28 +80,30 @@ function crearCalendarioAsistencia() {
     for (let d = 1; d <= ultimoDia; d++) celdas.push(d);
 
     cont.innerHTML = `
-      <div class="calendario-header">
-        <button type="button" class="tap-btn" id="cal-prev" aria-label="Mes anterior">‹</button>
-        <strong>${MESES[mesActual]} ${anioActual}</strong>
-        <button type="button" class="tap-btn" id="cal-next" aria-label="Mes siguiente">›</button>
-      </div>
-      <div class="calendario-dias-semana">${DIAS_SEMANA.map((d) => `<span>${d}</span>`).join("")}</div>
-      <div class="calendario-grilla">
-        ${celdas
-          .map((d) => {
-            if (!d) return `<span class="calendario-celda vacia"></span>`;
-            const fecha = fechaLocal(anioActual, mesActual, d);
-            const clases = [
-              "calendario-celda",
-              fechasConEventos.has(fecha) ? "con-evento" : "",
-              fecha === diaSeleccionado ? "seleccionada" : "",
-              fecha === fechaHoy ? "hoy" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            return `<button type="button" class="${clases}" data-fecha="${fecha}">${d}</button>`;
-          })
-          .join("")}
+      <div class="calendario-cuerpo" translate="no">
+        <div class="calendario-header">
+          <button type="button" class="tap-btn" id="cal-prev" aria-label="Mes anterior">‹</button>
+          <strong>${MESES[mesActual]} ${anioActual}</strong>
+          <button type="button" class="tap-btn" id="cal-next" aria-label="Mes siguiente">›</button>
+        </div>
+        <div class="calendario-dias-semana">${DIAS_SEMANA.map((d) => `<span>${d}</span>`).join("")}</div>
+        <div class="calendario-grilla">
+          ${celdas
+            .map((d) => {
+              if (!d) return `<span class="calendario-celda vacia"></span>`;
+              const fecha = fechaLocal(anioActual, mesActual, d);
+              const clases = [
+                "calendario-celda",
+                fechasConEventos.has(fecha) ? "con-evento" : "",
+                fecha === diaSeleccionado ? "seleccionada" : "",
+                fecha === fechaHoy ? "hoy" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return `<button type="button" class="${clases}" data-fecha="${fecha}">${d}</button>`;
+            })
+            .join("")}
+        </div>
       </div>
       <div id="calendario-detalle"></div>
     `;
@@ -130,32 +136,119 @@ function crearCalendarioAsistencia() {
     mostrarDetalleDia(diaSeleccionado);
   }
 
+  // Un evento del día, con su lista editable: cada asistente se puede
+  // quitar y se puede agregar a alguien más ahí mismo — antes esto era
+  // solo de lectura y para corregir un día pasado había que volver al
+  // flujo de registro (pedido del usuario, 2026-08-24).
+  function bloqueEvento(ev, asistentes) {
+    const card = document.createElement("div");
+    card.className = "card";
+    const yaEstan = new Set(asistentes.map((a) => a.persona_id));
+
+    card.innerHTML = `
+      <strong>${ev.nombre}</strong>
+      <span class="hint"><span class="cuenta-asistentes">${asistentes.length}</span> asistente${asistentes.length === 1 ? "" : "s"}</span>
+      <ul class="lista-asistieron lista-dia"></ul>
+      <div class="agregar-al-dia"></div>
+    `;
+    const ul = card.querySelector(".lista-dia");
+    const cuenta = card.querySelector(".cuenta-asistentes");
+
+    function refrescarCuenta() {
+      const n = ul.querySelectorAll("li[data-asistencia-id]").length;
+      cuenta.textContent = n;
+      const vacio = ul.querySelector(".sin-nadie");
+      if (n === 0 && !vacio) {
+        ul.insertAdjacentHTML("beforeend", `<li class="hint sin-nadie">Nadie registrado.</li>`);
+      } else if (n > 0 && vacio) {
+        vacio.remove();
+      }
+    }
+
+    function filaDelDia(registro) {
+      const li = document.createElement("li");
+      li.dataset.asistenciaId = registro.id;
+      li.innerHTML = `<span>${registro.persona_nombre}</span> <button type="button" class="quitar-asis" aria-label="Quitar a ${registro.persona_nombre}">✕</button>`;
+      li.querySelector(".quitar-asis").addEventListener("click", async () => {
+        if (!confirm(`¿Quitar a ${registro.persona_nombre} de "${ev.nombre}"?`)) return;
+        try {
+          await Api.quitarAsistencia(registro.id);
+          yaEstan.delete(registro.persona_id);
+          li.remove();
+          refrescarCuenta();
+        } catch (e) {
+          alert(`No se pudo quitar: ${e.message}`);
+        }
+      });
+      return li;
+    }
+
+    for (const a of asistentes) ul.appendChild(filaDelDia(a));
+    refrescarCuenta();
+
+    const buscador = crearBuscadorPersonas({
+      placeholder: "Agregar joven a este día...",
+      onSeleccionar: async (candidato) => {
+        if (yaEstan.has(candidato.persona_id)) {
+          alert(`${candidato.nombre_completo} ya está registrado en "${ev.nombre}".`);
+          return;
+        }
+        try {
+          const registro = await Api.registrarAsistencia({
+            persona_id: candidato.persona_id,
+            evento_id: ev.id,
+            presente: true,
+          });
+          yaEstan.add(candidato.persona_id);
+          ul.appendChild(filaDelDia(registro));
+          refrescarCuenta();
+        } catch (e) {
+          alert(`No se pudo agregar: ${e.message}`);
+        }
+      },
+    });
+    card.querySelector(".agregar-al-dia").appendChild(buscador);
+    return card;
+  }
+
+  // Para un día sin nada cargado (o para sumar otra actividad al mismo
+  // día): crea el evento y vuelve a dibujar, así aparece su punto en el
+  // calendario y su lista editable.
+  function bloqueNuevaActividad(fecha, yaHayEventos) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <p class="hint" style="margin-top:0">${yaHayEventos ? "¿Hubo otra actividad ese día?" : `No hay nada cargado el ${fecha}. Podés crear el registro acá:`}</p>
+      <select class="sel-actividad-dia">${opcionesActividades(actividades)}</select>
+      <button class="primary" type="button">Crear registro para este día</button>
+      <div class="error err-nueva-actividad"></div>
+    `;
+    card.querySelector("button").addEventListener("click", async () => {
+      const select = card.querySelector(".sel-actividad-dia");
+      const actividadId = Number(select.value);
+      const nombre = select.options[select.selectedIndex].textContent;
+      const err = card.querySelector(".err-nueva-actividad");
+      err.textContent = "";
+      try {
+        await Api.crearOReusarEvento({ actividad_id: actividadId, nombre: `${nombre} ${fecha}`, fecha });
+        await render();
+      } catch (e) {
+        err.textContent = e.message || "No se pudo crear el registro.";
+      }
+    });
+    return card;
+  }
+
   async function mostrarDetalleDia(fecha) {
     const detalle = document.getElementById("calendario-detalle");
     if (!detalle) return;
     detalle.innerHTML = `<p class="hint">Cargando asistencia del ${fecha}...</p>`;
     try {
       const eventosDia = await Api.eventosPorRango(fecha, fecha);
-      if (!eventosDia.length) {
-        detalle.innerHTML = `<p class="hint">No hay ninguna actividad registrada el ${fecha}.</p>`;
-        return;
-      }
-      const bloques = await Promise.all(
-        eventosDia.map(async (ev) => {
-          const asistentes = await Api.verAsistenciaEvento(ev.id);
-          const nombres = asistentes.length
-            ? asistentes.map((a) => `<li>${a.persona_nombre}</li>`).join("")
-            : `<li class="hint">Nadie registrado.</li>`;
-          return `
-            <div class="card">
-              <strong>${ev.nombre}</strong>
-              <span class="hint">${asistentes.length} asistente${asistentes.length === 1 ? "" : "s"}</span>
-              <ul class="kpi-lista">${nombres}</ul>
-            </div>
-          `;
-        })
-      );
-      detalle.innerHTML = bloques.join("");
+      const asistentesPorEvento = await Promise.all(eventosDia.map((ev) => Api.verAsistenciaEvento(ev.id)));
+      detalle.innerHTML = "";
+      eventosDia.forEach((ev, i) => detalle.appendChild(bloqueEvento(ev, asistentesPorEvento[i])));
+      detalle.appendChild(bloqueNuevaActividad(fecha, eventosDia.length > 0));
     } catch (e) {
       detalle.innerHTML = `<div class="error">${e.message}</div>`;
     }

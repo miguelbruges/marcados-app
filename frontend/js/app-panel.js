@@ -101,7 +101,11 @@ Router.on("/panel", async () => {
 
 // --- Semáforo de asistencia: período configurable + pastillas que se abren
 // para mostrar quiénes están detrás del número (pedido del usuario, 2026-08-11) ---
-const PERIODOS_SEMAFORO = [7, 15, 30, 60, 90];
+// Sin 7 días: el grupo se reúne una vez por semana, así que en esa ventana
+// casi nunca había Encuentros suficientes y la pestaña mostraba "sin datos"
+// siempre — estructuralmente no podía servir de nada (pedido del usuario,
+// 2026-08-24).
+const PERIODOS_SEMAFORO = [15, 30, 60, 90];
 let semaforoNivelAbierto = null;
 
 async function cargarSemaforo(ventanaDias) {
@@ -119,9 +123,9 @@ async function cargarSemaforo(ventanaDias) {
         <p class="aclaracion">
           Se calcula sobre los <strong>Encuentro Marcados</strong> del período: Verde = 85% o más de asistencia,
           Amarillo = entre 50% y 84%, Rojo = menos de 50%. "Sin datos" significa que en este período todavía no
-          hubo al menos 2 Encuentros para poder calcular algo confiable — no que a alguien le falte historial.
-          Alerta operativa, no una conclusión pastoral — la decisión siempre la toma una persona. Tocá un color
-          para ver quiénes son.
+          hubo ningún Encuentro cargado — no que a alguien le falte historial. Ojo: con un solo Encuentro en el
+          período, el color sale de esa única reunión, así que leelo con pinzas. Alerta operativa, no una
+          conclusión pastoral — la decisión siempre la toma una persona. Tocá un color para ver quiénes son.
         </p>
         <div class="periodo-chips">
           ${PERIODOS_SEMAFORO.map(

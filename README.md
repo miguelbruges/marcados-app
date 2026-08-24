@@ -140,9 +140,12 @@ handoff): % de asistencia en una ventana de días (30 por defecto,
 `ALERTAS_VENTANA_DIAS`), verde/amarillo/rojo/sin datos según umbrales
 configurables (`ALERTAS_UMBRAL_VERDE`/`ALERTAS_UMBRAL_AMARILLO`, 85%/50% por
 defecto — mismos valores que trae el Excel), más inasistencias consecutivas.
-Es una alerta **operativa**, nunca una conclusión espiritual — por eso vive
-separada de `semaforo_espiritual`, que siempre lo fija una persona a mano
-(regla no negociable, sección 21).
+"Sin datos" significa que en la ventana no hubo ningún Encuentro cargado:
+alcanza con una sola reunión para asignar color (`ALERTAS_MINIMO_EVENTOS`,
+1 por defecto — estuvo en 2, pero con un encuentro semanal eso dejaba
+períodos enteros sin poder evaluarse). Es una alerta **operativa**, nunca
+una conclusión espiritual — por eso vive separada de `semaforo_espiritual`,
+que siempre lo fija una persona a mano (regla no negociable, sección 21).
 
 ## Ranking de invitaciones
 
