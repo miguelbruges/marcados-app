@@ -147,9 +147,17 @@ function opcionesActividades(actividades) {
   return actividades.map((a) => `<option value="${a.id}" data-nombre="${a.nombre}">${a.nombre}</option>`).join("");
 }
 
+// Cualquier actividad cuyo nombre arranque con "Otro" cuenta como la
+// opción de texto libre. Antes esto comparaba contra "Otro" exacto y en
+// producción la actividad se llama "Otro / Evento esporádico" (la
+// migración que iba a renombrarla se saltea si ya existe una llamada
+// "Otro") — así que el campo para escribir el nombre a mano no aparecía
+// nunca, ni en Registrar asistencia ni en Importar lista (bug reportado
+// por el usuario, 2026-08-24).
 function esOtroSeleccionado(selectId) {
   const opt = document.getElementById(selectId).selectedOptions[0];
-  return opt && opt.dataset.nombre === "Otro";
+  if (!opt) return false;
+  return (opt.dataset.nombre || "").trim().toLowerCase().startsWith("otro");
 }
 
 function wireOtroManual(selectId, slotId) {

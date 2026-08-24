@@ -217,18 +217,26 @@ function crearCalendarioAsistencia(actividades) {
   function bloqueNuevaActividad(fecha, yaHayEventos) {
     const card = document.createElement("div");
     card.className = "card";
+    // Mismos ids/ayudantes que el formulario de arriba, para que elegir
+    // "Otro" abra acá también el campo de nombre libre (pedido del
+    // usuario, 2026-08-24). Solo existe un bloque de estos a la vez —
+    // mostrarDetalleDia() limpia el detalle antes de volver a armarlo.
     card.innerHTML = `
       <p class="hint" style="margin-top:0">${yaHayEventos ? "¿Hubo otra actividad ese día?" : `No hay nada cargado el ${fecha}. Podés crear el registro acá:`}</p>
-      <select class="sel-actividad-dia">${opcionesActividades(actividades)}</select>
+      <select id="cal-actividad">${opcionesActividades(actividades)}</select>
+      <div id="cal-otro-slot"></div>
       <button class="primary" type="button">Crear registro para este día</button>
       <div class="error err-nueva-actividad"></div>
     `;
     card.querySelector("button").addEventListener("click", async () => {
-      const select = card.querySelector(".sel-actividad-dia");
-      const actividadId = Number(select.value);
-      const nombre = select.options[select.selectedIndex].textContent;
+      const actividadId = Number(document.getElementById("cal-actividad").value);
+      const nombre = nombreEventoElegido("cal-actividad");
       const err = card.querySelector(".err-nueva-actividad");
       err.textContent = "";
+      if (esOtroSeleccionado("cal-actividad") && nombre.toLowerCase().startsWith("otro")) {
+        err.textContent = "Escribí qué evento fue.";
+        return;
+      }
       try {
         await Api.crearOReusarEvento({ actividad_id: actividadId, nombre: `${nombre} ${fecha}`, fecha });
         await render();
@@ -249,6 +257,9 @@ function crearCalendarioAsistencia(actividades) {
       detalle.innerHTML = "";
       eventosDia.forEach((ev, i) => detalle.appendChild(bloqueEvento(ev, asistentesPorEvento[i])));
       detalle.appendChild(bloqueNuevaActividad(fecha, eventosDia.length > 0));
+      // Después de insertarlo: wireOtroManual busca por getElementById, así
+      // que el bloque tiene que estar ya en el documento.
+      wireOtroManual("cal-actividad", "cal-otro-slot");
     } catch (e) {
       detalle.innerHTML = `<div class="error">${e.message}</div>`;
     }
