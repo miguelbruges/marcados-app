@@ -61,11 +61,10 @@ Router.on("/panel", async () => {
 
   async function cargarKpis() {
     try {
-      const [resumen, activosCrudo, inactivosCrudo, bautizados30d] = await Promise.all([
+      const [resumen, activosCrudo, inactivosCrudo] = await Promise.all([
         Api.dashboardResumen(),
         Api.personas(true),
         Api.personas(false),
-        Api.asistieron30Dias(),
       ]);
       if (!Router.vigente(miToken)) return;
       // PersonaOut no trae nombre_completo (solo nombres/apellidos por separado) —
@@ -79,7 +78,6 @@ Router.on("/panel", async () => {
         { label: "Activos", valor: resumen.activos, personas: todas.filter((p) => p.estado === "Activo"), etiqueta: (p) => p.estado, vacioTexto: "Nadie con estado Activo todavía — se marca desde la ficha de cada joven.", filtro: "activos", resaltar: "campo-estado" },
         { label: "Bautizados", valor: resumen.bautizados, personas: todas.filter((p) => p.bautizado), etiqueta: () => "bautizado", filtro: "bautizados", resaltar: "bautizado-slot" },
         { label: "Sirviendo", valor: resumen.sirviendo, personas: todas.filter((p) => p.servidor), etiqueta: () => "servidor", filtro: "servidores", resaltar: "servicio-slot" },
-        { label: "Asistieron · 30 días", valor: resumen.asistieron_ultimos_30_dias, personas: bautizados30d, etiqueta: () => "asistió", vacioTexto: "Nadie todavía en los últimos 30 días.", filtro: "asistio30" },
       ]);
     } catch (e) {
       if (!Router.vigente(miToken)) return;

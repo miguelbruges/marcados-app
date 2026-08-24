@@ -62,7 +62,6 @@ const Api = (() => {
     setSession,
 
     dashboardResumen: () => request("/dashboard/resumen"),
-    asistieron30Dias: () => request("/dashboard/asistieron-30-dias"),
     alertasResumen: (ventanaDias) => request(`/dashboard/alertas-resumen${ventanaDias ? "?ventana_dias=" + ventanaDias : ""}`),
     alertasDetalle: (nivel, ventanaDias) =>
       request(`/dashboard/alertas-detalle?nivel=${nivel}${ventanaDias ? "&ventana_dias=" + ventanaDias : ""}`),

@@ -1,12 +1,10 @@
-from datetime import date, timedelta
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user, require_acceso_pastoral
-from app.models import Asistencia, Evento, Persona
+from app.models import Persona
 from app.schemas import PersonaResumen
 from app.services.alertas_asistencia import personas_por_nivel, resumen_niveles
 
@@ -24,37 +22,15 @@ def resumen(db: Session = Depends(get_db), _=Depends(get_current_user)):
     bautizados = db.scalar(select(func.count()).select_from(Persona).where(Persona.bautizado == True)) or 0  # noqa: E712
     sirviendo = db.scalar(select(func.count(func.distinct(Persona.id))).select_from(Persona).where(Persona.servidor == True)) or 0  # noqa: E712
 
-    hace_30 = date.today() - timedelta(days=30)
-    asistieron_30d = db.scalar(
-        select(func.count(func.distinct(Asistencia.persona_id)))
-        .select_from(Asistencia)
-        .join(Evento, Evento.id == Asistencia.evento_id)
-        .where(Evento.fecha >= hace_30, Asistencia.presente == True)  # noqa: E712
-    ) or 0
-
+    # Sin "asistieron últimos 30 días": era una tarjeta más del panel que no
+    # le servía a nadie para decidir nada (pedido del usuario, 2026-08-24) —
+    # el semáforo ya cubre la lectura de asistencia, y con más contexto.
     return {
         "total_jovenes": total,
         "activos": activos,
         "bautizados": bautizados,
         "sirviendo": sirviendo,
-        "asistieron_ultimos_30_dias": asistieron_30d,
     }
-
-
-@router.get("/asistieron-30-dias", response_model=list[PersonaResumen])
-def asistieron_30_dias(db: Session = Depends(get_db), _=Depends(get_current_user)):
-    """Lista de personas detrás del conteo 'asistieron_ultimos_30_dias' de
-    /dashboard/resumen — mismo filtro exacto, para que la tarjeta del panel
-    se pueda abrir y mostrar quiénes son, no solo cuántos."""
-    hace_30 = date.today() - timedelta(days=30)
-    return db.scalars(
-        select(Persona)
-        .join(Asistencia, Asistencia.persona_id == Persona.id)
-        .join(Evento, Evento.id == Asistencia.evento_id)
-        .where(Evento.fecha >= hace_30, Asistencia.presente == True)  # noqa: E712
-        .distinct()
-        .order_by(Persona.apellidos, Persona.nombres)
-    ).all()
 
 
 @router.get("/alertas-resumen")

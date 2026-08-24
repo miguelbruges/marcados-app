@@ -5,7 +5,6 @@ function etiquetaFiltroPersonas(filtro) {
     inactivos: "Inactivos",
     bautizados: "Bautizados",
     servidores: "Sirviendo",
-    asistio30: "Asistieron en los últimos 30 días",
   }[filtro] || null;
 }
 
@@ -61,12 +60,6 @@ Router.on("/personas", async () => {
     else if (filtro === "inactivos") personas = inactivas;
     else if (filtro === "bautizados") personas = personas.filter((p) => p.bautizado);
     else if (filtro === "servidores") personas = personas.filter((p) => p.servidor);
-    else if (filtro === "asistio30") {
-      const asistieron = await Api.asistieron30Dias();
-      if (!Router.vigente(miToken)) return;
-      const ids = new Set(asistieron.map((p) => p.id));
-      personas = personas.filter((p) => ids.has(p.id));
-    }
 
     const cont = document.getElementById("lista-personas");
     function pintar(lista) {
