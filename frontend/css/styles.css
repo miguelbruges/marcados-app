@@ -103,6 +103,33 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 
+/* --- Vista por rol (solo admin): naranja fuerte a propósito, para que no
+   se confunda nunca con la vista real ni quede activa sin darse cuenta. --- */
+.banner-vista-rol {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: var(--naranja-600);
+  color: white;
+  padding: 0.55rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.banner-vista-rol strong { text-transform: uppercase; letter-spacing: 0.02em; }
+#btn-salir-vista-rol {
+  margin-left: auto;
+  flex: none;
+  background: white;
+  color: var(--naranja-700);
+  border: none;
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -530,7 +557,7 @@ button.secundario {
 
 /* --- Semáforo de asistencia --- */
 .semaforo { margin-top: 1.6rem; }
-.semaforo .aclaracion { font-size: 0.78rem; color: var(--texto-suave); margin: 0.15rem 0 1rem; line-height: 1.4; }
+.aclaracion { font-size: 0.78rem; color: var(--texto-suave); margin: 0.15rem 0 1rem; line-height: 1.4; }
 
 .periodo-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
 .chip-periodo {
