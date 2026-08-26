@@ -295,14 +295,8 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     <button id="btn-editar-ficha" class="secundario">Editar</button>
     <div class="error" id="ficha-error"></div>
 
-    <div id="servicio-slot"></div>
-    <div id="bautizado-slot"></div>
-
     ${seccionSeguimiento}
   `;
-
-  pintarServicio(persona);
-  pintarBautizado(persona);
 
   let editando = false;
   const $form = document.getElementById("form-ficha");
@@ -338,6 +332,24 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     `;
   }
 
+  // Servidor y bautizado: los botones para cambiarlos viven ahora dentro
+  // de "Editar" (pedido del usuario, 2026-08-24) — antes eran dos tarjetas
+  // con botón sueltas debajo de la ficha, siempre a la vista. En modo
+  // lectura quedan como una línea más de Datos, para no perder el dato de
+  // vista. Conservan los ids servicio-slot/bautizado-slot en los dos modos
+  // porque las tarjetas del Panel enlazan acá con ?resaltar=.
+  function resumenServicioBautizadoHtml() {
+    const servidor = persona.servidor
+      ? `Sí${persona.fecha_inicio_servicio ? `, desde ${persona.fecha_inicio_servicio}` : ""}`
+      : persona.fecha_inicio_servicio
+        ? `No (fue servidor desde ${persona.fecha_inicio_servicio})`
+        : "No";
+    return `
+      <div class="hint" id="servicio-slot"><strong>Servidor:</strong> ${servidor}</div>
+      <div class="hint" id="bautizado-slot"><strong>Bautizado:</strong> ${persona.bautizado ? "Sí" : "No"}</div>
+    `;
+  }
+
   function pintarFicha() {
     const camposHtml = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
       const valor = persona[campo] ?? "";
@@ -350,10 +362,17 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     $form.innerHTML =
       camposHtml +
       areasHtml() +
-      (editando ? `<button class="primary" type="submit" id="btn-guardar-ficha" hidden>Guardar</button>` : "");
+      (editando
+        ? `<div id="servicio-slot"></div><div id="bautizado-slot"></div>
+           <button class="primary" type="submit" id="btn-guardar-ficha" hidden>Guardar</button>`
+        : resumenServicioBautizadoHtml());
     $btnEditar.hidden = editando;
 
     if (editando) {
+      // Se guardan solos al tocarlos (cada uno es su propio PATCH), así que
+      // no dependen del botón Guardar del formulario.
+      pintarServicio(persona);
+      pintarBautizado(persona);
       const marcarCambio = () => {
         document.getElementById("btn-guardar-ficha").hidden = false;
       };
