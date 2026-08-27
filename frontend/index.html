@@ -13,7 +13,13 @@
      número fuerza a que se vuelva a pedir. -->
 <link rel="icon" href="img/favicon-48.png?v=1" type="image/png">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=1">
-<link rel="stylesheet" href="css/styles.css">
+<!-- ?v= en el CSS y en todos los JS por el mismo motivo que en el ícono de
+     arriba: sin eso el navegador se queda con la copia que ya tenía y no se
+     entera de que hubo un despliegue nuevo. Pasó de verdad (reportado por el
+     usuario, 2026-08-24): un cambio ya subido y verificado seguía sin verse
+     en el celular. SUBIR ESTE NÚMERO EN CADA DESPLIEGUE que toque css/ o
+     js/, y dejarlo igual al de service-worker.js. -->
+<link rel="stylesheet" href="css/styles.css?v=5">
 </head>
 <body>
 <div id="banner-instalar" class="banner-instalar" hidden>
@@ -72,9 +78,9 @@
 </nav>
 
 <script src="config.js"></script>
-<script src="js/api.js"></script>
-<script src="js/matching-ui.js"></script>
-<script src="js/router.js"></script>
+<script src="js/api.js?v=5"></script>
+<script src="js/matching-ui.js?v=5"></script>
+<script src="js/router.js?v=5"></script>
 <!-- app.js se separó por pantalla (auditoría 2026-08-14, 1897 líneas en un
      solo archivo costaba navegar) — sin build step, así que sigue siendo
      scripts planos en orden: app-core.js primero (DOM refs y helpers
@@ -82,11 +88,11 @@
      y el service worker, necesita que todas las rutas ya estén
      registradas). El orden entre los del medio no importa en sí, pero se
      mantiene por claridad. -->
-<script src="js/app-core.js"></script>
-<script src="js/app-panel.js"></script>
-<script src="js/app-admin.js"></script>
-<script src="js/app-personas.js"></script>
-<script src="js/app-asistencia.js"></script>
-<script src="js/app-bootstrap.js"></script>
+<script src="js/app-core.js?v=5"></script>
+<script src="js/app-panel.js?v=5"></script>
+<script src="js/app-admin.js?v=5"></script>
+<script src="js/app-personas.js?v=5"></script>
+<script src="js/app-asistencia.js?v=5"></script>
+<script src="js/app-bootstrap.js?v=5"></script>
 </body>
 </html>

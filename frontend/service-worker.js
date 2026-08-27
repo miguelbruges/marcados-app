@@ -10,19 +10,26 @@
 // quede pegado con el SHELL viejo, que listaba "./js/app.js" (ya no
 // existe; cache.addAll() falla entero si un solo archivo de la lista da
 // 404, así que esto no era opcional).
-const CACHE = "marcados-shell-v3";
+// v5: index.html pasa a pedir el CSS y los JS con ?v=N (2026-08-24). Sin eso
+// el navegador reusaba la copia que ya tenía y no se enteraba del despliegue
+// nuevo: un cambio ya subido y verificado seguía sin verse en el celular.
+// TIENE QUE COINCIDIR con el ?v= de index.html — si difieren, el service
+// worker precachea URLs que la página nunca pide y el respaldo sin conexión
+// deja de servir.
+const VERSION = "5";
+const CACHE = `marcados-shell-v${VERSION}`;
 const SHELL = [
   "./index.html",
-  "./css/styles.css",
-  "./js/api.js",
-  "./js/matching-ui.js",
-  "./js/router.js",
-  "./js/app-core.js",
-  "./js/app-panel.js",
-  "./js/app-admin.js",
-  "./js/app-personas.js",
-  "./js/app-asistencia.js",
-  "./js/app-bootstrap.js",
+  `./css/styles.css?v=${VERSION}`,
+  `./js/api.js?v=${VERSION}`,
+  `./js/matching-ui.js?v=${VERSION}`,
+  `./js/router.js?v=${VERSION}`,
+  `./js/app-core.js?v=${VERSION}`,
+  `./js/app-panel.js?v=${VERSION}`,
+  `./js/app-admin.js?v=${VERSION}`,
+  `./js/app-personas.js?v=${VERSION}`,
+  `./js/app-asistencia.js?v=${VERSION}`,
+  `./js/app-bootstrap.js?v=${VERSION}`,
   "./manifest.webmanifest",
 ];
 
