@@ -2,7 +2,10 @@
 function etiquetaFiltroPersonas(filtro) {
   return {
     activos: "Activos",
-    inactivos: "Inactivos",
+    // "inactivos" filtra por ficha ARCHIVADA (activo=false), no por el
+    // estado Activo/Inactivo/Fluctúa — la etiqueta lo dice para que no se
+    // confundan los dos conceptos, que ya se mezclaron antes.
+    inactivos: "Fichas archivadas",
     bautizados: "Bautizados",
     servidores: "Sirviendo",
   }[filtro] || null;
@@ -13,10 +16,15 @@ function stat(num, label) {
 }
 
 function filaPersona(p) {
+  // La ficha archivada se marca: desde que se pueden juntar duplicados
+  // (2026-08-24) archivar es algo habitual, y sin este aviso las fichas
+  // absorbidas seguían apareciendo iguales a las vivas — se veía como si la
+  // fusión no hubiera hecho nada.
+  const archivada = p.activo === false ? `<span class="badge BAJA">archivada</span>` : "";
   return `
     <a class="card-link" href="#/personas/ver?id=${p.id}">
-    <div class="card">
-      <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}
+    <div class="card${p.activo === false ? " card-archivada" : ""}">
+      <strong>${p.nombres} ${p.apellidos}</strong>${badgeFicha(p)}${archivada}
       <div class="hint">
         ${p.id_unico}${p.estado ? " · " + p.estado : ""}${p.bautizado ? " · bautizado" : ""}
         ${p.servidor ? " · servidor" + (p.fecha_inicio_servicio ? ` desde ${p.fecha_inicio_servicio}` : "") : ""}
@@ -49,17 +57,25 @@ Router.on("/personas", async () => {
         <span class="acceso-rapido-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
         Pendientes por revisar
       </a>
+      <a class="acceso-rapido" href="#/personas/duplicados">
+        <span class="acceso-rapido-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></span>
+        Posibles duplicados
+      </a>
     </div>
     <div id="lista-personas" class="hint">Cargando...</div>
   `;
   try {
     const [activas, inactivas] = await Promise.all([Api.personas(true), Api.personas(false)]);
     if (!Router.vigente(miToken)) return;
-    let personas = activas.concat(inactivas);
-    if (filtro === "activos") personas = personas.filter((p) => p.estado === "Activo");
+    // Sin filtro se listan solo las fichas vivas. Antes se concatenaban las
+    // archivadas y quedaban mezcladas sin distinción — con la fusión de
+    // duplicados eso significaba seguir viendo cinco "José Pacheco" después
+    // de haberlos juntado. Las archivadas siguen a un toque, en su filtro.
+    let personas = activas;
+    if (filtro === "activos") personas = activas.filter((p) => p.estado === "Activo");
     else if (filtro === "inactivos") personas = inactivas;
-    else if (filtro === "bautizados") personas = personas.filter((p) => p.bautizado);
-    else if (filtro === "servidores") personas = personas.filter((p) => p.servidor);
+    else if (filtro === "bautizados") personas = activas.filter((p) => p.bautizado);
+    else if (filtro === "servidores") personas = activas.filter((p) => p.servidor);
 
     const cont = document.getElementById("lista-personas");
     function pintar(lista) {
@@ -614,6 +630,112 @@ Router.on("/personas/pendientes-revision", async () => {
   } catch (e) {
     $app.innerHTML += `<div class="error">${e.message}</div>`;
   }
+});
+
+// --- Posibles duplicados (pedido del usuario, 2026-08-24) ---
+// En la lista de fichas incompletas aparecía "José Pacheco" cinco veces, y
+// eran cinco registros distintos. Acá se agrupan y se pueden juntar, pero
+// nunca solo: dos jóvenes pueden llamarse igual de verdad (hermanos, padre
+// e hijo), y confundirlos borraría el historial de una persona real.
+Router.on("/personas/duplicados", async () => {
+  if (!requiereSesion()) return;
+  if (!tieneAccesoPastoral()) {
+    $app.innerHTML = `<p class="error">Esta sección es solo para líderes y encargados.</p>`;
+    return;
+  }
+  const miToken = Router.token();
+  $app.innerHTML = `
+    ${botonAtras("/personas", "Jóvenes")}
+    <h1>Posibles duplicados</h1>
+    <p class="hint">
+      Fichas que podrían ser la misma persona, agrupadas por teléfono igual o nombre casi idéntico. Es una
+      sospecha, no una conclusión: dos jóvenes pueden llamarse igual de verdad. Revisá cada grupo y decidí vos.
+    </p>
+    <div id="dup-cuerpo"><p class="hint">Buscando...</p></div>
+  `;
+
+  async function cargar() {
+    const cont = document.getElementById("dup-cuerpo");
+    try {
+      const grupos = await Api.duplicados();
+      if (!Router.vigente(miToken)) return;
+      if (!grupos.length) {
+        cont.innerHTML = `<p class="hint">No se encontró ninguna ficha repetida. 🎉</p>`;
+        return;
+      }
+      cont.innerHTML = grupos
+        .map(
+          (g, i) => `
+        <div class="card grupo-dup" data-grupo="${i}">
+          <p class="alertas-explica" style="margin-top:0">
+            ${g.personas.length} fichas — <strong>${g.motivos.join(" · ")}</strong>
+          </p>
+          <ul class="lista-alertas">
+            ${g.personas
+              .map(
+                (p) => `
+              <li>
+                <label class="check-label" style="margin:0;flex:1;min-width:0">
+                  <input type="radio" name="conservar-${i}" value="${p.id}" ${p.id === g.sugerencia_conservar_id ? "checked" : ""}>
+                  <span class="alerta-cuerpo">
+                    <a class="alerta-nombre" href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a>
+                    <span class="alerta-meta">${p.id_unico} · ${p.historial.asistencias} asistencia${p.historial.asistencias === 1 ? "" : "s"} · ${p.historial.seguimientos} seguimiento${p.historial.seguimientos === 1 ? "" : "s"} · ficha ${p.ficha_completa_pct}%${p.telefono ? ` · ${p.telefono}` : ""}</span>
+                  </span>
+                </label>
+              </li>`
+              )
+              .join("")}
+          </ul>
+          <p class="hint">Elegí cuál ficha conservar (viene marcada la que más historial tiene). Las demás se archivan y su historial se mueve a la elegida.</p>
+          <button class="primary" type="button" data-fusionar="${i}">Juntar en la elegida</button>
+          <div class="error" data-error="${i}"></div>
+        </div>`
+        )
+        .join("");
+
+      cont.querySelectorAll("[data-fusionar]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const i = btn.dataset.fusionar;
+          const grupo = grupos[Number(i)];
+          const errorBox = cont.querySelector(`[data-error="${i}"]`);
+          errorBox.textContent = "";
+          const elegido = cont.querySelector(`input[name="conservar-${i}"]:checked`);
+          if (!elegido) {
+            errorBox.textContent = "Elegí cuál conservar.";
+            return;
+          }
+          const conservarId = Number(elegido.value);
+          const otras = grupo.personas.filter((p) => p.id !== conservarId);
+          const nombreElegida = grupo.personas.find((p) => p.id === conservarId).nombre_completo;
+          if (
+            !confirm(
+              `Se va a conservar "${nombreElegida}" y archivar ${otras.length} ficha${otras.length === 1 ? "" : "s"}:\n\n` +
+                otras.map((p) => `• ${p.nombre_completo} (${p.id_unico})`).join("\n") +
+                `\n\nSu asistencia y seguimiento se mueven a la que queda. No se borra nada: las archivadas quedan guardadas.\n\n¿Continuar?`
+            )
+          )
+            return;
+          btn.disabled = true;
+          btn.textContent = "Juntando...";
+          try {
+            for (const otra of otras) {
+              await Api.fusionarDuplicados(conservarId, otra.id);
+            }
+            await cargar();
+          } catch (e) {
+            btn.disabled = false;
+            btn.textContent = "Juntar en la elegida";
+            errorBox.textContent = e.message || "No se pudo juntar.";
+          }
+        });
+      });
+    } catch (e) {
+      if (!Router.vigente(miToken)) return;
+      cont.innerHTML = `<div class="error">${e.message}</div>`;
+    }
+  }
+
+  await cargar();
 });
 
 // --- Agregar joven ---

@@ -12,6 +12,7 @@ from app.models import AreaServicio, Bitacora, Persona, PersonaArea, Usuario
 from app.schemas import (
     AreaServicioOut,
     FichaIncompletaOut,
+    FusionarDuplicadosRequest,
     InvitacionRankingOut,
     MarcarServidorRequest,
     MatchResponse,
@@ -23,6 +24,7 @@ from app.schemas import (
     PersonaUpdate,
 )
 from app.services.alertas_asistencia import calcular_inasistencias_consecutivas, calcular_semaforo
+from app.services.duplicados import buscar_duplicados, fusionar
 from app.services.bitacora import registrar_cambios
 from app.services.identidad import siguiente_id_unico
 from app.services.invitaciones import calcular_periodo, ranking_invitaciones
@@ -122,6 +124,41 @@ def invitaciones_resumen(
         rango_desde, rango_hasta = calcular_periodo(periodo)
     resultado = ranking_invitaciones(db, rango_desde, rango_hasta)
     return [InvitacionRankingOut(**r.__dict__) for r in resultado]
+
+
+# --- Fichas duplicadas (pedido del usuario, 2026-08-24) ---
+# Van ANTES de /{persona_id}: FastAPI resuelve por orden y si no, "duplicados"
+# se tomaría como un id de persona.
+
+
+@router.get("/duplicados")
+def listar_duplicados(db: Session = Depends(get_db), _=Depends(require_acceso_pastoral)):
+    """Grupos de fichas que podrían ser la misma persona, con el motivo.
+
+    Solo detecta y explica: fusionar es siempre decisión humana, porque dos
+    jóvenes pueden llamarse igual de verdad (hermanos, padre e hijo) y
+    juntarlos borraría el historial de una persona real.
+    """
+    return buscar_duplicados(db)
+
+
+@router.post("/duplicados/fusionar")
+def fusionar_duplicados(
+    data: FusionarDuplicadosRequest,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(require_acceso_pastoral),
+):
+    """Mueve el historial de una ficha a otra y archiva la absorbida.
+
+    No borra nada: la absorbida queda con activo=False y sus datos intactos,
+    y cada movimiento queda en Bitácora para poder rastrear un error.
+    """
+    try:
+        return fusionar(db, data.conservar_id, data.absorber_id, usuario.id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @router.get("/{persona_id}", response_model=PersonaOut)

@@ -604,6 +604,15 @@ button.secundario {
 #semaforo-detalle .kpi-lista a { color: var(--texto); text-decoration: none; font-weight: 600; }
 #semaforo-detalle .kpi-lista a:hover { color: var(--morado-600); }
 
+/* Ficha archivada (p.ej. absorbida al juntar duplicados): se ve apagada
+   para que no se confunda con una viva en la lista. */
+.card-archivada { opacity: 0.62; border-style: dashed; }
+
+/* Grupo de posibles duplicados: el radio y la ficha en una sola fila. */
+.grupo-dup .lista-alertas li { align-items: flex-start; }
+.grupo-dup .check-label { align-items: flex-start; }
+.grupo-dup .check-label input { margin-top: 0.25rem; }
+
 /* Teléfono y correo tocables en la ficha: se ven como el resto del dato
    (no como un enlace suelto de navegador), solo un poco destacados para
    que se note que se pueden tocar. */

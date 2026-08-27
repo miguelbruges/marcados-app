@@ -257,3 +257,20 @@ Pendiente, sin bloqueo técnico: dominio propio (Render ya da HTTPS en su
 subdominio), copias de seguridad automáticas de Supabase (hoy el respaldo es
 manual vía "Exportar a Excel"), paginación en listados si la app crece más
 allá de unos cientos de personas.
+
+## Fichas duplicadas
+
+`GET /personas/duplicados` agrupa fichas que podrían ser la misma persona
+(mismo teléfono normalizado, o nombre casi idéntico — umbral alto a
+propósito, para no llenar la lista de hermanos y primos). Solo detecta y
+explica el motivo: **fusionar es siempre decisión humana**, porque dos
+jóvenes pueden llamarse igual de verdad y juntarlos borraría el historial
+de una persona real.
+
+`POST /personas/duplicados/fusionar` mueve asistencia, seguimiento, áreas e
+invitaciones de una ficha a otra y archiva la absorbida (`activo=False`) —
+nunca borra, y todo queda en Bitácora con un campo `fusionada_en` que dice
+a dónde fue. Completa campos vacíos de la ficha que se conserva, pero jamás
+pisa un dato que ya tenía. Pantalla: Jóvenes → "Posibles duplicados"
+(pedido del usuario, 2026-08-24, tras ver "José Pacheco" cinco veces en la
+lista de fichas incompletas).

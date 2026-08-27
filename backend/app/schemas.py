@@ -155,6 +155,14 @@ class FichaIncompletaOut(BaseModel):
     datos_faltantes: list[str]
 
 
+class FusionarDuplicadosRequest(BaseModel):
+    """Cuál ficha se conserva y cuál se absorbe. Las dos van explícitas: el
+    servidor nunca elige por su cuenta a quién archivar."""
+
+    conservar_id: int
+    absorber_id: int
+
+
 class InvitacionRankingOut(BaseModel):
     persona_id: int
     id_unico: str

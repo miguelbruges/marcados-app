@@ -110,6 +110,9 @@ const Api = (() => {
       request(`/personas/${personaId}/marcar-servidor`, { method: "POST", body: { fecha_inicio_servicio } }),
     fichasIncompletas: () => request("/personas/fichas-incompletas"),
     pendientesRevision: () => request("/personas/pendientes-revision"),
+    duplicados: () => request("/personas/duplicados"),
+    fusionarDuplicados: (conservar_id, absorber_id) =>
+      request("/personas/duplicados/fusionar", { method: "POST", body: { conservar_id, absorber_id } }),
     invitacionesResumen: (periodo) => request(`/personas/invitaciones-resumen?periodo=${periodo}`),
     areasServicio: () => request("/areas-servicio"),
     actualizarAreasPersona: (personaId, areaIds) =>
