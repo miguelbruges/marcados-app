@@ -46,3 +46,42 @@ def listar_requieren_atencion(db: Session = Depends(get_db), _=Depends(require_a
     return db.scalars(
         select(Seguimiento).where(Seguimiento.requiere_atencion == True).order_by(Seguimiento.fecha.desc())  # noqa: E712
     ).all()
+
+
+@router.patch("/{seguimiento_id}/resolver", response_model=SeguimientoOut)
+def resolver_seguimiento(
+    seguimiento_id: int,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(require_acceso_pastoral),
+):
+    """Baja la marca "requiere atención" de un registro ya revisado.
+
+    Faltaba: la marca se podía poner (al crear el seguimiento, o
+    automáticamente al importar el Excel) pero NO sacar, así que el centro
+    de alertas solo crecía y el contador de la campanita quedó en 99+ con
+    cosas ya resueltas hace rato — una lista que no se puede ir tachando no
+    sirve para priorizar (reportado por el usuario, 2026-08-24).
+
+    Solo baja la bandera: la nota y su texto quedan intactos en el historial
+    de la persona, porque son lo que un humano escribió y no se borra. Queda
+    en Bitácora quién la resolvió.
+    """
+    from app.services.bitacora import registrar_cambios
+
+    registro = db.get(Seguimiento, seguimiento_id)
+    if not registro:
+        raise HTTPException(status_code=404, detail="Registro de seguimiento no encontrado")
+    if not registro.requiere_atencion:
+        return registro  # idempotente: resolver dos veces no es un error
+
+    registrar_cambios(
+        db,
+        tabla="seguimientos",
+        registro_id=registro.id,
+        usuario_id=usuario.id,
+        cambios={"requiere_atencion": (True, False)},
+    )
+    registro.requiere_atencion = False
+    db.commit()
+    db.refresh(registro)
+    return registro

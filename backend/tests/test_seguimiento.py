@@ -101,3 +101,90 @@ def test_consolidacion_no_puede_ver_historial_seguimiento(client, db_session):
     headers_consolidacion = _headers_rol(client, db_session, RolUsuario.CONSOLIDACION, "sofia@marcadosapp.dev")
     resp = client.get(f"/seguimiento/persona/{persona_id}", headers=headers_consolidacion)
     assert resp.status_code == 403
+
+
+# --- Resolver "requiere atención" (pedido del usuario, 2026-08-24) ---
+# La marca se podía poner pero no sacar, así que el centro de alertas solo
+# crecía y el contador quedaba en 99+ con cosas ya resueltas.
+
+def test_resolver_baja_la_marca_y_lo_saca_del_centro_de_alertas(client, db_session):
+    headers = _headers_rol(client, db_session, RolUsuario.LIDER, "resolver1@marcadosapp.dev")
+    persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers).json()["id"]
+    seg = client.post(
+        "/seguimiento",
+        json={"persona_id": persona_id, "notas": "hay que llamarla", "requiere_atencion": True},
+        headers=headers,
+    ).json()
+
+    assert len(client.get("/seguimiento/requieren-atencion", headers=headers).json()) == 1
+
+    resp = client.patch(f"/seguimiento/{seg['id']}/resolver", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["requiere_atencion"] is False
+    assert client.get("/seguimiento/requieren-atencion", headers=headers).json() == []
+
+
+def test_resolver_no_borra_la_nota_del_historial(client, db_session):
+    """La bandera baja, pero lo que escribió una persona no se toca."""
+    headers = _headers_rol(client, db_session, RolUsuario.LIDER, "resolver2@marcadosapp.dev")
+    persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers).json()["id"]
+    seg = client.post(
+        "/seguimiento",
+        json={"persona_id": persona_id, "notas": "conversamos el domingo", "requiere_atencion": True},
+        headers=headers,
+    ).json()
+
+    client.patch(f"/seguimiento/{seg['id']}/resolver", headers=headers)
+
+    historial = client.get(f"/seguimiento/persona/{persona_id}", headers=headers).json()
+    assert len(historial) == 1
+    assert historial[0]["notas"] == "conversamos el domingo"
+
+
+def test_resolver_es_idempotente(client, db_session):
+    headers = _headers_rol(client, db_session, RolUsuario.LIDER, "resolver3@marcadosapp.dev")
+    persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers).json()["id"]
+    seg = client.post(
+        "/seguimiento",
+        json={"persona_id": persona_id, "notas": "x", "requiere_atencion": True},
+        headers=headers,
+    ).json()
+
+    assert client.patch(f"/seguimiento/{seg['id']}/resolver", headers=headers).status_code == 200
+    assert client.patch(f"/seguimiento/{seg['id']}/resolver", headers=headers).status_code == 200
+
+
+def test_resolver_queda_en_bitacora(client, db_session):
+    from app.models import Bitacora
+
+    headers = _headers_rol(client, db_session, RolUsuario.LIDER, "resolver4@marcadosapp.dev")
+    persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers).json()["id"]
+    seg = client.post(
+        "/seguimiento",
+        json={"persona_id": persona_id, "notas": "x", "requiere_atencion": True},
+        headers=headers,
+    ).json()
+    client.patch(f"/seguimiento/{seg['id']}/resolver", headers=headers)
+
+    filas = db_session.query(Bitacora).filter(Bitacora.tabla == "seguimientos").all()
+    assert len(filas) == 1
+    assert filas[0].campo == "requiere_atencion"
+    assert filas[0].valor_nuevo == "False"
+
+
+def test_resolver_inexistente_da_404(client, db_session):
+    headers = _headers_rol(client, db_session, RolUsuario.LIDER, "resolver5@marcadosapp.dev")
+    assert client.patch("/seguimiento/99999/resolver", headers=headers).status_code == 404
+
+
+def test_consolidacion_no_puede_resolver(client, db_session):
+    headers_lider = _headers_rol(client, db_session, RolUsuario.LIDER, "resolver6@marcadosapp.dev")
+    persona_id = client.post("/personas", json={"nombres": "Ana", "apellidos": "Perez"}, headers=headers_lider).json()["id"]
+    seg = client.post(
+        "/seguimiento",
+        json={"persona_id": persona_id, "notas": "x", "requiere_atencion": True},
+        headers=headers_lider,
+    ).json()
+
+    headers_consolidacion = _headers_rol(client, db_session, RolUsuario.CONSOLIDACION, "resolver7@marcadosapp.dev")
+    assert client.patch(f"/seguimiento/{seg['id']}/resolver", headers=headers_consolidacion).status_code == 403
