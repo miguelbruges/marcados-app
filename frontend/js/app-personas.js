@@ -136,6 +136,29 @@ function nivelAsistenciaEtiqueta(nivel) {
   return { verde: "Verde", amarillo: "Amarillo", rojo: "Rojo", sin_datos: "Sin datos" }[nivel] || nivel;
 }
 
+// Teléfonos y correos tocables desde la ficha (pedido del usuario,
+// 2026-08-24): la app se usa desde el celular en medio de una reunión, y
+// hasta ahora el número había que memorizarlo o copiarlo a mano para poder
+// llamar. tel: abre el marcador y mailto: el correo; en escritorio, si no
+// hay app asociada, el enlace simplemente no hace nada — nunca rompe la
+// ficha ni pierde el dato, que se sigue viendo igual.
+const CAMPOS_TELEFONO = new Set(["telefono", "telefono_emergencia"]);
+
+function valorFichaHtml(campo, valor) {
+  if (!valor) return "—";
+  if (CAMPOS_TELEFONO.has(campo)) {
+    // El href se limpia (sin espacios ni guiones) para que el marcador lo
+    // entienda; el texto visible queda tal cual lo cargaron.
+    const limpio = String(valor).replace(/[^\d+]/g, "");
+    if (!limpio) return valor;
+    return `<a class="enlace-contacto" href="tel:${limpio}">${valor}</a>`;
+  }
+  if (campo === "correo_electronico" && String(valor).includes("@")) {
+    return `<a class="enlace-contacto" href="mailto:${valor}">${valor}</a>`;
+  }
+  return valor;
+}
+
 Router.on("/personas/ver", async () => {
   if (!requiereSesion()) return;
   const id = Router.query().get("id");
@@ -354,7 +377,7 @@ function renderFicha(persona, alertas, seguimientos, catalogos, areasDisponibles
     const camposHtml = CAMPOS_EDITABLES_FICHA.map(([campo, etiqueta, tipo]) => {
       const valor = persona[campo] ?? "";
       if (!editando) {
-        return `<div class="hint" id="campo-${campo}"><strong>${etiqueta}:</strong> ${valor || "—"}</div>`;
+        return `<div class="hint" id="campo-${campo}"><strong>${etiqueta}:</strong> ${valorFichaHtml(campo, valor)}</div>`;
       }
       return campoInput(campo, etiqueta, tipo, valor);
     }).join("");

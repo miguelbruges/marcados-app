@@ -117,6 +117,7 @@ const Api = (() => {
     historialSeguimiento: (personaId) => request(`/seguimiento/persona/${personaId}`),
     crearSeguimiento: (data) => request("/seguimiento", { method: "POST", body: data }),
     seguimientosRequierenAtencion: () => request("/seguimiento/requieren-atencion"),
+    resolverSeguimiento: (id) => request(`/seguimiento/${id}/resolver`, { method: "PATCH" }),
     catalogo: (tipo) => request(`/catalogos/${tipo}`),
 
     actividades: () => request("/actividades"),

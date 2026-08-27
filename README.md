@@ -147,6 +147,15 @@ períodos enteros sin poder evaluarse). Es una alerta **operativa**, nunca
 una conclusión espiritual — por eso vive separada de `semaforo_espiritual`,
 que siempre lo fija una persona a mano (regla no negociable, sección 21).
 
+El centro de alertas (`/alertas` en la app) junta tres listas: semáforo en
+rojo, fichas incompletas y seguimientos marcados "requiere atención". Esa
+última marca la pone una persona al escribir la nota, o la importación del
+Excel cuando un dato necesita decisión humana. Se baja con
+`PATCH /seguimiento/{id}/resolver` — que solo apaga la bandera y deja la
+nota intacta en el historial. Antes no había forma de sacarla, así que la
+lista solo crecía y el contador quedaba clavado en 99+ con cosas ya
+resueltas (pedido del usuario, 2026-08-24).
+
 ## Ranking de invitaciones
 
 Pedido del usuario (2026-08-10): ver quién invitó más jóvenes que se

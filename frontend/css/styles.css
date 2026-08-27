@@ -604,6 +604,93 @@ button.secundario {
 #semaforo-detalle .kpi-lista a { color: var(--texto); text-decoration: none; font-weight: 600; }
 #semaforo-detalle .kpi-lista a:hover { color: var(--morado-600); }
 
+/* Teléfono y correo tocables en la ficha: se ven como el resto del dato
+   (no como un enlace suelto de navegador), solo un poco destacados para
+   que se note que se pueden tocar. */
+.enlace-contacto {
+  color: var(--morado-600);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--morado-500);
+}
+.enlace-contacto:hover { color: var(--acento-2); border-bottom-color: var(--acento-2); }
+
+/* --- Centro de alertas: antes reusaba .kpi-lista, que solo está estilada
+   dentro de .kpi y de #semaforo-detalle — suelta en esta página caía al
+   estilo por defecto del navegador (viñetas y enlaces azules subrayados,
+   reportado por el usuario, 2026-08-24). Acá tiene el suyo propio. --- */
+.alertas-seccion { margin-bottom: 1.8rem; }
+.alertas-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin: 0 0 0.3rem;
+}
+.alertas-cuenta {
+  flex: none;
+  min-width: 1.5rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--morado-100);
+  color: var(--morado-700);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.alertas-seccion.vacia .alertas-cuenta { background: var(--verde-fondo); color: var(--verde); }
+.alertas-explica { font-size: 0.78rem; color: var(--texto-suave); margin: 0 0 0.7rem; line-height: 1.45; }
+
+.lista-alertas { list-style: none; margin: 0; padding: 0; }
+.lista-alertas li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.45rem;
+}
+.lista-alertas .alerta-cuerpo { flex: 1; min-width: 0; }
+.lista-alertas a.alerta-nombre {
+  display: block;
+  color: var(--texto);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.lista-alertas a.alerta-nombre:hover { color: var(--morado-600); }
+.lista-alertas .alerta-meta {
+  display: block;
+  color: var(--texto-suave);
+  font-size: 0.76rem;
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+.lista-alertas .alerta-pct {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.btn-resolver {
+  flex: none;
+  border: 1px solid var(--verde);
+  background: var(--verde-fondo);
+  color: var(--verde);
+  border-radius: 9px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-resolver:disabled { opacity: 0.5; cursor: default; }
+
 /* --- Administración (solo admin) --- */
 .admin-sub { color: var(--texto-suave); font-size: 0.88rem; margin: -0.6rem 0 1.3rem; }
 .lista-admin { display: flex; flex-direction: column; gap: 0.7rem; }

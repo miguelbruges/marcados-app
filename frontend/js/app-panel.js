@@ -198,9 +198,20 @@ Router.on("/alertas", async () => {
   $app.innerHTML = `
     ${botonAtras("/panel", "Panel")}
     <h1>Alertas</h1>
-    <p class="hint">Todo lo de acá es información operativa para decidir qué revisar primero — nunca una conclusión sobre nadie.</p>
+    <p class="hint">Tres listas de cosas para revisar, juntas para no tener que buscarlas por separado. Todo esto es información operativa — nunca una conclusión sobre nadie.</p>
     <div id="alertas-cuerpo"><p class="hint">Cargando...</p></div>
   `;
+
+  function seccion(titulo, cantidad, explicacion, cuerpo, textoVacio) {
+    return `
+      <section class="alertas-seccion ${cantidad ? "" : "vacia"}">
+        <h2 class="alertas-titulo">${titulo} <span class="alertas-cuenta">${cantidad}</span></h2>
+        <p class="alertas-explica">${explicacion}</p>
+        ${cantidad ? cuerpo : `<p class="hint">${textoVacio}</p>`}
+      </section>
+    `;
+  }
+
   try {
     const [rojos, incompletas, atencion] = await Promise.all([
       Api.alertasDetalle("rojo"),
@@ -208,35 +219,95 @@ Router.on("/alertas", async () => {
       Api.seguimientosRequierenAtencion(),
     ]);
     if (!Router.vigente(miToken)) return;
-    document.getElementById("alertas-cuerpo").innerHTML = `
-      <h2>Semáforo en rojo · 30 días (${rojos.length})</h2>
-      ${
-        rojos.length
-          ? `<ul class="kpi-lista">${rojos.map((p) => `<li><a href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a></li>`).join("")}</ul>`
-          : `<p class="hint">Nadie en rojo ahora mismo.</p>`
-      }
 
-      <h2>Fichas incompletas (${incompletas.length})</h2>
-      ${
-        incompletas.length
-          ? `<ul class="kpi-lista">${incompletas
-              .map(
-                (p) =>
-                  `<li><a href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a><span class="badge ${nivelFicha(p.ficha_completa_pct)}">${p.ficha_completa_pct}%</span></li>`
-              )
-              .join("")}</ul>`
-          : `<p class="hint">Todas las fichas activas están por encima del umbral.</p>`
-      }
+    const htmlRojos = `<ul class="lista-alertas">${rojos
+      .map(
+        (p) => `
+      <li>
+        <span class="alerta-cuerpo">
+          <a class="alerta-nombre" href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a>
+          <span class="alerta-meta">${p.id_unico || ""}</span>
+        </span>
+      </li>`
+      )
+      .join("")}</ul>`;
 
-      <h2>Seguimientos que requieren atención (${atencion.length})</h2>
-      ${
-        atencion.length
-          ? `<ul class="kpi-lista">${atencion
-              .map((s) => `<li><a href="#/personas/ver?id=${s.persona_id}">${s.persona_nombre}</a><span class="hint">${s.fecha}</span></li>`)
-              .join("")}</ul>`
-          : `<p class="hint">Nada pendiente.</p>`
-      }
-    `;
+    const htmlIncompletas = `<ul class="lista-alertas">${incompletas
+      .map(
+        (p) => `
+      <li>
+        <span class="alerta-cuerpo">
+          <a class="alerta-nombre" href="#/personas/ver?id=${p.id}">${p.nombre_completo}</a>
+          <span class="alerta-meta">Faltan: ${(p.datos_faltantes || []).join(", ") || "—"}</span>
+        </span>
+        <span class="alerta-pct badge ${nivelFicha(p.ficha_completa_pct)}">${p.ficha_completa_pct}%</span>
+      </li>`
+      )
+      .join("")}</ul>`;
+
+    // Se muestra el texto de la nota y quién/qué la marcó: sin eso la lista
+    // era solo nombres y fechas repetidas, sin decir qué había que hacer
+    // (reportado por el usuario, 2026-08-24).
+    const htmlAtencion = `<ul class="lista-alertas" id="lista-atencion">${atencion
+      .map(
+        (s) => `
+      <li data-seguimiento="${s.id}">
+        <span class="alerta-cuerpo">
+          <a class="alerta-nombre" href="#/personas/ver?id=${s.persona_id}">${s.persona_nombre}</a>
+          <span class="alerta-meta">${s.fecha}${s.tipo ? ` · ${s.tipo}` : ""} — ${s.notas || ""}</span>
+        </span>
+        <button type="button" class="btn-resolver" data-resolver="${s.id}">Resuelto</button>
+      </li>`
+      )
+      .join("")}</ul>`;
+
+    document.getElementById("alertas-cuerpo").innerHTML =
+      seccion(
+        "Semáforo en rojo · 30 días",
+        rojos.length,
+        'Asistieron a menos de la mitad de los Encuentros de los últimos 30 días. Es un dato de asistencia para saber a quién buscar — no dice nada de la persona.',
+        htmlRojos,
+        "Nadie en rojo ahora mismo."
+      ) +
+      seccion(
+        "Fichas incompletas",
+        incompletas.length,
+        "Les faltan datos básicos de contacto o de emergencia. El porcentaje es cuánto de la ficha está lleno; abrí a la persona para completar lo que dice que falta.",
+        htmlIncompletas,
+        "Todas las fichas activas están por encima del umbral."
+      ) +
+      seccion(
+        "Seguimientos que requieren atención",
+        atencion.length,
+        'Notas de seguimiento pastoral que alguien del equipo marcó como "requiere atención" al escribirlas, más las que dejó la importación del Excel cuando un dato necesitaba decisión humana (por ejemplo, dos jóvenes con el mismo teléfono). Son cosas para revisar y conversar, no alertas automáticas. Cuando ya la resolviste, tocá <strong>Resuelto</strong>: baja la marca y sale de esta lista, pero la nota queda en el historial de la persona.',
+        htmlAtencion,
+        "Nada pendiente."
+      );
+
+    document.querySelectorAll("[data-resolver]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+          await Api.resolverSeguimiento(Number(btn.dataset.resolver));
+          const fila = btn.closest("li");
+          fila.remove();
+          const seccionEl = document.getElementById("lista-atencion");
+          const restantes = seccionEl ? seccionEl.querySelectorAll("li").length : 0;
+          const cuenta = seccionEl?.closest(".alertas-seccion")?.querySelector(".alertas-cuenta");
+          if (cuenta) cuenta.textContent = restantes;
+          if (!restantes && seccionEl) {
+            seccionEl.closest(".alertas-seccion").classList.add("vacia");
+            seccionEl.outerHTML = `<p class="hint">Nada pendiente.</p>`;
+          }
+          actualizarBadgeAlertas();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Resuelto";
+          alert(`No se pudo resolver: ${err.message}`);
+        }
+      });
+    });
   } catch (e) {
     if (!Router.vigente(miToken)) return;
     document.getElementById("alertas-cuerpo").innerHTML = `<div class="error">${e.message}</div>`;
