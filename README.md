@@ -260,12 +260,37 @@ allá de unos cientos de personas.
 
 ## Fichas duplicadas
 
-`GET /personas/duplicados` agrupa fichas que podrían ser la misma persona
-(mismo teléfono normalizado, o nombre casi idéntico — umbral alto a
-propósito, para no llenar la lista de hermanos y primos). Solo detecta y
-explica el motivo: **fusionar es siempre decisión humana**, porque dos
-jóvenes pueden llamarse igual de verdad y juntarlos borraría el historial
-de una persona real.
+`GET /personas/duplicados` agrupa fichas que podrían ser la misma persona.
+Solo detecta y explica el motivo: **fusionar es siempre decisión humana**,
+porque dos jóvenes pueden llamarse igual de verdad y juntarlos borraría el
+historial de una persona real.
+
+Las reglas se calibraron corriendo el detector sobre los 120 jóvenes reales
+(2026-08-24), y la primera versión estaba mal: de 7 grupos, 6 eran personas
+distintas. Lo que se corrigió, y por qué cada cosa importa:
+
+- **Se comparan pares, no cadenas.** Con union-find bastaba que A se
+  pareciera a B y B a C para meter a A con C. Armaba un grupo de cuatro con
+  Amy Paola Bravo Mercado, dos hermanas Marbello Capataz y una ficha
+  llamada solo "Paola". Ahora un grupo solo se forma si todos sus
+  integrantes se parecen entre sí.
+- **`token_sort_ratio`, no `token_set_ratio`.** El segundo da 100 cuando un
+  nombre está contenido en el otro, así que una ficha cargada solo como
+  "Sofia" empataba al 100% con tres Sofías distintas. Sirve para buscar a
+  alguien escribiendo medio nombre; no para afirmar que dos fichas son la
+  misma persona.
+- **Un nombre tiene que contener al otro.** El puntaje solo no alcanza:
+  "Santiago Ramirez" vs "Santiago Gomez" da 80 y son distintos; "Maria
+  Paula Mendez" vs "...Mendez Navarro" da 81.8 y es la misma. 1.8 puntos no
+  sirven como corte, pero la forma sí: en un caso falta un apellido, en el
+  otro los apellidos se contradicen.
+- **Mismo teléfono no basta.** En una familia se comparte el celular: las
+  hermanas Rosado Montes y las Marbello Capataz lo comparten y son personas
+  distintas. El teléfono repetido afloja la exigencia sobre el nombre, no la
+  reemplaza.
+
+Con eso, sobre los mismos 120 jóvenes queda **un solo grupo, y es un
+duplicado real**. Cada uno de esos casos tiene su test.
 
 `POST /personas/duplicados/fusionar` mueve asistencia, seguimiento, áreas e
 invitaciones de una ficha a otra y archiva la absorbida (`activo=False`) —
