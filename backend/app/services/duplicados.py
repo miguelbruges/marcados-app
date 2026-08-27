@@ -30,23 +30,29 @@ from app.models import Asistencia, Persona, PersonaArea, Seguimiento
 
 # --- Umbrales, calibrados contra los 120 jóvenes reales (2026-08-24) ---
 #
+# Los nombres de los ejemplos de acá abajo (y los de los tests) están
+# cambiados a propósito: son menores de edad y esto es un repositorio. Se
+# mantiene la FORMA de cada caso real (un apellido de más, tildes, mismo
+# celular entre hermanas), que es lo que se está midiendo.
+#
 # Se usa token_sort_ratio y NO token_set_ratio (que es lo que usa el buscador
 # de la app). La diferencia importa: token_set_ratio da 100 cuando un nombre
 # está CONTENIDO en el otro, así que una ficha cargada como solo "Sofia"
-# empataba al 100% con "Linda Sofía Berrocal Mercado", "Marian Sofia Mercado
-# Yela" y "Nathalie Sofía Arrieta Acuña" a la vez — tres personas distintas.
+# empataba al 100% con "Linda Sofía Bermudez Molina", "Marian Sofia Molina
+# Yepes" y "Nathalie Sofía Arenas Acosta" a la vez — tres personas distintas.
 # Para buscar a alguien escribiendo medio nombre eso está bien; para decidir
 # si dos fichas son la misma persona, no.
 #
-# Medido sobre casos reales:
-#   misma persona : 100 (José/Jose Pacheco), 82 (Mendez / Mendez Navarro),
-#                    72 (Estefania Contreras Van-strahlen / STEFANIA contreras)
-#   personas distintas: 64, 59 y 45 (hermanas Marbello Capataz y Rosado Montes)
+# Medido sobre los nombres reales (por eso los números no se reproducen con
+# los inventados de acá arriba):
+#   misma persona     : 100 (mismo nombre con y sin tilde), 82 (un apellido
+#                       de más), 72 (nombre con una errata + un apellido menos)
+#   personas distintas: 64, 59 y 45 (pares de hermanas)
 UMBRAL_SOLO_NOMBRE = 80
 # Con el teléfono repetido se puede aflojar, pero NO regalar: en una familia
-# se comparte el celular. Las hermanas Rosado Montes (45) y Marbello Capataz
-# (59) comparten teléfono y son personas distintas; Estefania/STEFANIA (72)
-# es la misma. El corte va en el medio.
+# se comparte el celular. Los dos pares de hermanas (45 y 59) comparten
+# teléfono y son personas distintas; el duplicado de verdad da 72. El corte
+# va en el medio.
 UMBRAL_NOMBRE_CON_TELEFONO = 70
 
 
@@ -55,7 +61,7 @@ def _parecido(a: str, b: str) -> float:
 
 
 # Qué tan parecidas tienen que ser dos palabras sueltas para contar como la
-# misma: cubre tildes y erratas ("Estefania"/"STEFANIA", "José"/"Jose").
+# misma: cubre tildes y erratas ("Valentina"/"VALENTINA", "José"/"Jose").
 UMBRAL_PALABRA = 85
 
 
@@ -125,8 +131,8 @@ def buscar_duplicados(db: Session) -> list[dict[str, Any]]:
     se parecen entre sí (una camarilla, no una cadena). Antes se usaba
     union-find, que junta por transitividad: bastaba que A se pareciera a B
     y B a C para meter a A con C aunque no tuvieran nada que ver. Sobre los
-    datos reales eso armaba un grupo de cuatro con Amy Paola Bravo Mercado,
-    dos hermanas Marbello Capataz y una ficha llamada solo "Paola"
+    datos reales eso armaba un grupo de cuatro con Ayla Paola Quiroga Mendoza,
+    dos hermanas Salas Peralta y una ficha llamada solo "Paola"
     (encontrado al revisar los 120 jóvenes reales, 2026-08-24).
 
     Solo mira fichas activas: una ya archivada por una fusión anterior no

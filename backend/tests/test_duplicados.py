@@ -2,6 +2,11 @@
 
 Lo que más importa acá no es que fusione, sino que NO pierda historial y que
 no junte a dos personas distintas por su cuenta.
+
+Los casos salieron de correr el detector sobre los 120 jóvenes reales, pero
+los nombres y teléfonos de acá están cambiados: son datos de menores y esto
+es un repositorio. Se mantiene la forma de cada caso (un apellido de más,
+tildes, mismo celular entre hermanas), que es lo que se prueba.
 """
 
 from datetime import date
@@ -76,8 +81,8 @@ def test_no_agrupa_a_personas_distintas(db_session):
 
 
 def test_dos_hermanos_con_apellido_igual_no_son_duplicados(db_session):
-    _persona(db_session, "Juan", "Rosado Montes")
-    _persona(db_session, "Nahomi", "Rosado Montes")
+    _persona(db_session, "Juan", "Zapata Rivas")
+    _persona(db_session, "Naomi", "Zapata Rivas")
     db_session.commit()
 
     assert buscar_duplicados(db_session) == []
@@ -306,15 +311,15 @@ def test_fusionar_inexistente_da_404(client, db_session):
 def test_no_encadena_por_transitividad(db_session):
     """El peor caso encontrado: con union-find, A~B por teléfono y B~C por
     nombre metía a A y C en el mismo grupo sin tener nada que ver. Terminaba
-    juntando a Amy Paola Bravo Mercado con dos hermanas Marbello Capataz."""
-    _persona(db_session, "Amy Paola", "Bravo Mercado", telefono="3005555762")
-    _persona(db_session, "Isa Anjholetf", "Marbello Capataz", telefono="3002222997")
-    _persona(db_session, "Keren Paola", "Marbello Capataz", telefono="3002222997")
+    juntando a Ayla Paola Quiroga Mendoza con dos hermanas Salas Peralta."""
+    _persona(db_session, "Ayla Paola", "Quiroga Mendoza", telefono="3000000101")
+    _persona(db_session, "Isa Nicoll", "Salas Peralta", telefono="3000000202")
+    _persona(db_session, "Karen Paola", "Salas Peralta", telefono="3000000202")
     db_session.commit()
 
     for g in buscar_duplicados(db_session):
         nombres = {p["nombre_completo"] for p in g["personas"]}
-        assert "Amy Paola Bravo Mercado" not in nombres, "no tiene que ver con las Marbello"
+        assert "Ayla Paola Quiroga Mendoza" not in nombres, "no tiene que ver con las Salas"
 
 
 def test_una_ficha_con_solo_el_nombre_de_pila_no_matchea_a_todas(db_session):
@@ -322,19 +327,19 @@ def test_una_ficha_con_solo_el_nombre_de_pila_no_matchea_a_todas(db_session):
     Sofías del grupo, porque token_set_ratio da 100 cuando un nombre está
     contenido en el otro. Sirve para buscar, no para afirmar identidad."""
     _persona(db_session, "Sofia", "")
-    _persona(db_session, "Linda Sofía", "Berrocal Mercado")
-    _persona(db_session, "Marian Sofia", "Mercado Yela")
-    _persona(db_session, "Nathalie Sofía", "Arrieta Acuña")
+    _persona(db_session, "Linda Sofía", "Bermudez Molina")
+    _persona(db_session, "Marian Sofia", "Molina Yepes")
+    _persona(db_session, "Nathalie Sofía", "Arenas Acosta")
     db_session.commit()
 
     assert buscar_duplicados(db_session) == []
 
 
 def test_hermanos_que_comparten_telefono_no_son_duplicados(db_session):
-    """En una familia se comparte el celular. Las hermanas Rosado Montes y
-    las Marbello Capataz comparten teléfono y son personas distintas."""
-    _persona(db_session, "Briannys Johana", "Rosado Montes", telefono="3001113013")
-    _persona(db_session, "Nahomi Shaileth", "Rosado Montes", telefono="3001113013")
+    """En una familia se comparte el celular. Las hermanas Zapata Rivas y
+    las Salas Peralta comparten teléfono y son personas distintas."""
+    _persona(db_session, "Briana Johana", "Zapata Rivas", telefono="3000000303")
+    _persona(db_session, "Naomi Sarai", "Zapata Rivas", telefono="3000000303")
     db_session.commit()
 
     assert buscar_duplicados(db_session) == []
@@ -344,18 +349,18 @@ def test_apellidos_distintos_no_son_la_misma_persona(db_session):
     """"Santiago Ramirez" vs "Santiago Gomez" da 80 de parecido y "Maria
     Paula Mendez" vs "...Mendez Navarro" da 81.8 — 1.8 puntos no sirven como
     corte, así que se exige que un nombre contenga al otro."""
-    _persona(db_session, "Santiago", "Ramirez", telefono="3002222523")
-    _persona(db_session, "Santiago", "Gomez", telefono="3000000801")
+    _persona(db_session, "Santiago", "Ramirez", telefono="3000000505")
+    _persona(db_session, "Santiago", "Gomez", telefono="3000000606")
     db_session.commit()
 
     assert buscar_duplicados(db_session) == []
 
 
 def test_el_hermano_de_alguien_no_es_esa_persona(db_session):
-    """Del Excel real: una ficha cargada como "Emmanel Hrmano de Paula"
+    """Del Excel real: una ficha cargada como "Emanel Hrmano de Paula"
     quedaba agrupada con "Paula" y con "Maria Paula Mendez"."""
     _persona(db_session, "Maria Paula", "Mendez")
-    _persona(db_session, "Emmanel", "Hrmano de Paula")
+    _persona(db_session, "Emanel", "Hrmano de Paula")
     db_session.commit()
 
     assert buscar_duplicados(db_session) == []
@@ -364,8 +369,8 @@ def test_el_hermano_de_alguien_no_es_esa_persona(db_session):
 def test_si_detecta_el_duplicado_real_del_excel(db_session):
     """El único verdadero de los 120: misma persona cargada dos veces, con
     el nombre escrito distinto pero el mismo teléfono."""
-    _persona(db_session, "Estefania", "Contreras Van-strahlen", telefono="3002222998")
-    _persona(db_session, "STEFANIA", "contreras", telefono="3002222998")
+    _persona(db_session, "Valentina", "Ortega Del-valle", telefono="3000000404")
+    _persona(db_session, "VALENTINA", "ortega", telefono="3000000404")
     db_session.commit()
 
     grupos = buscar_duplicados(db_session)

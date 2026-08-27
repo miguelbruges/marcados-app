@@ -8,10 +8,13 @@ maestro, que queda como fuente histórica congelada.
 
 **En producción**, en uso real por el equipo de consolidación:
 https://marcados-app.onrender.com — backend en Render, base de datos en
-Supabase/Postgres, 120 jóvenes reales cargados. Ver `docs/ARQUITECTURA.md`
-para decisiones de diseño y `docs/ESTADO.md` para el checklist de avance
-(actualizar ambos al terminar cada sesión de trabajo — se desactualizan
-fácil si no).
+Supabase/Postgres, 120 jóvenes reales cargados.
+
+**¿Retomando el proyecto en un chat nuevo? Empezá por `docs/HANDOFF.md`** —
+las reglas que no se negocian, las trampas que ya costaron tiempo y qué
+quedó sin cerrar. Después, `docs/ARQUITECTURA.md` para decisiones de diseño
+y `docs/ESTADO.md` para el checklist de avance (actualizar los tres al
+terminar cada sesión de trabajo — se desactualizan fácil si no).
 
 Funciona como PWA instalable (ícono propio, banner de "Instalar app" en
 Android/iOS) — no hay APK ni publicación en tiendas de aplicaciones.
@@ -267,11 +270,13 @@ historial de una persona real.
 
 Las reglas se calibraron corriendo el detector sobre los 120 jóvenes reales
 (2026-08-24), y la primera versión estaba mal: de 7 grupos, 6 eran personas
-distintas. Lo que se corrigió, y por qué cada cosa importa:
+distintas. Lo que se corrigió, y por qué cada cosa importa (los nombres de
+los ejemplos están cambiados —son menores de edad y esto es un repositorio—
+pero conservan la forma del caso real):
 
 - **Se comparan pares, no cadenas.** Con union-find bastaba que A se
   pareciera a B y B a C para meter a A con C. Armaba un grupo de cuatro con
-  Amy Paola Bravo Mercado, dos hermanas Marbello Capataz y una ficha
+  Ayla Paola Quiroga Mendoza, dos hermanas Salas Peralta y una ficha
   llamada solo "Paola". Ahora un grupo solo se forma si todos sus
   integrantes se parecen entre sí.
 - **`token_sort_ratio`, no `token_set_ratio`.** El segundo da 100 cuando un
@@ -285,7 +290,7 @@ distintas. Lo que se corrigió, y por qué cada cosa importa:
   sirven como corte, pero la forma sí: en un caso falta un apellido, en el
   otro los apellidos se contradicen.
 - **Mismo teléfono no basta.** En una familia se comparte el celular: las
-  hermanas Rosado Montes y las Marbello Capataz lo comparten y son personas
+  hermanas Zapata Rivas y las Salas Peralta lo comparten y son personas
   distintas. El teléfono repetido afloja la exigencia sobre el nombre, no la
   reemplaza.
 
