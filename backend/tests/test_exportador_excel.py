@@ -176,3 +176,52 @@ def test_export_endpoint_requiere_admin(client, db_session):
 
     resp = client.get("/export/excel", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
+
+
+# --- Recálculo al abrir (pedido del usuario, 2026-08-24) ---
+# openpyxl no evalúa fórmulas y descarta los valores ya calculados de la
+# plantilla al reguardar: medido sobre el export real, de 2333 fórmulas
+# quedaban 0 con valor. Sin la marca de recálculo el archivo se abre en
+# blanco en cualquier lector que no recalcule solo.
+
+def _calc_pr(ruta_o_buffer):
+    import re
+    import zipfile
+
+    z = zipfile.ZipFile(ruta_o_buffer)
+    xml = z.read("xl/workbook.xml").decode()
+    m = re.search(r"<calcPr[^>]*/?>", xml)
+    return m.group(0) if m else None
+
+
+def test_export_pide_recalculo_al_abrir(plantilla, db_session):
+    salida = generar_export(db_session, plantilla)
+    assert 'fullCalcOnLoad="1"' in _calc_pr(salida)
+
+
+def test_export_fuerza_recalculo_aunque_la_plantilla_lo_tenga_apagado(tmp_path, db_session):
+    """El peor caso: una plantilla guardada con fullCalcOnLoad="0" daría un
+    archivo vacío Y sin recalcular. La bandera se fija en el código, no se
+    hereda de la plantilla."""
+    from openpyxl.workbook.properties import CalcProperties
+
+    ruta = tmp_path / "plantilla_sin_recalculo.xlsx"
+    _construir_plantilla_sintetica(ruta)
+    wb = openpyxl.load_workbook(ruta)
+    wb.calculation = CalcProperties(calcId=191029, fullCalcOnLoad=False)
+    wb.save(ruta)
+    assert 'fullCalcOnLoad="0"' in _calc_pr(ruta)
+
+    salida = generar_export(db_session, ruta)
+    assert 'fullCalcOnLoad="1"' in _calc_pr(salida)
+
+
+def test_export_fuerza_recalculo_si_la_plantilla_no_tiene_calcPr(tmp_path, db_session):
+    ruta = tmp_path / "plantilla_sin_calcpr.xlsx"
+    _construir_plantilla_sintetica(ruta)
+    wb = openpyxl.load_workbook(ruta)
+    wb.calculation = None
+    wb.save(ruta)
+
+    salida = generar_export(db_session, ruta)
+    assert 'fullCalcOnLoad="1"' in _calc_pr(salida)

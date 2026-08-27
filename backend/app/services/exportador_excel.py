@@ -28,6 +28,7 @@ from typing import BinaryIO
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import range_boundaries
+from openpyxl.workbook.properties import CalcProperties
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -146,7 +147,39 @@ def generar_export(db: Session, plantilla: Path | BinaryIO) -> io.BytesIO:
     ).all()
     _llenar_asistencia(wb["Asistencia"], asistencias)
 
+    _forzar_recalculo_al_abrir(wb)
+
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     return buffer
+
+
+def _forzar_recalculo_al_abrir(wb: openpyxl.Workbook) -> None:
+    """Marca el libro para que Excel recalcule TODO al abrirlo.
+
+    Por qué hace falta (medido sobre el export real que reportó el usuario,
+    2026-08-24): openpyxl no evalúa fórmulas, y al reguardar descarta los
+    valores ya calculados que traía la plantilla. En números: de las 2333
+    fórmulas del libro, la plantilla tenía 1325 con valor guardado y el
+    archivo exportado quedaba con 0. Sin esta marca, cualquier programa que
+    no recalcule muestra todas esas celdas vacías — los dos paneles, Edad,
+    Segmento, % de asistencia, Semáforo, Ficha completa.
+
+    A propósito NO se restauran los valores viejos de la plantilla: fueron
+    calculados sobre los datos de ANTES, así que se leerían como cifras
+    actuales siendo falsas. En blanco hasta recalcular es honesto; un número
+    desactualizado con cara de bueno, no — y acá se toman decisiones sobre
+    personas mirando esos números.
+
+    Se fija explícitamente en vez de confiar en lo que traiga la plantilla:
+    hoy funciona de casualidad porque openpyxl completa la bandera al
+    reescribir calcPr, pero una plantilla con fullCalcOnLoad="0" daría un
+    archivo en blanco Y sin recalcular, que es el peor caso posible.
+    """
+    if wb.calculation is None:
+        wb.calculation = CalcProperties()
+    wb.calculation.fullCalcOnLoad = True
+    # calcId=0 es "no sé con qué versión se calculó esto": refuerza el
+    # recálculo incluso en lectores que ignoren fullCalcOnLoad.
+    wb.calculation.calcId = 0
