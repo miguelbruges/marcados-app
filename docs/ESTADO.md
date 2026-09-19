@@ -2,7 +2,7 @@
 
 Checklist vivo. Actualizar al final de cada sesión de trabajo sobre este
 repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
-`marcados-sistema` de Claude). Última actualización: 2026-08-27.
+`marcados-sistema` de Claude). Última actualización: 2026-09-19.
 
 Si estás retomando el proyecto en un chat nuevo, leé primero
 `docs/HANDOFF.md`: ahí están las reglas que no se negocian y las trampas
@@ -95,6 +95,28 @@ ve reflejado en ningún lado". Detalle largo en `docs/HANDOFF.md` §5.
 - [x] `?v=N` en el CSS y los JS (y el mismo número en `service-worker.js`):
       sin eso un despliegue ya subido seguía sin verse en el celular.
 
+## Sesión 2026-09-19 — arranque lento (parcheado, no resuelto)
+
+Reporte del usuario: "demora demasiado al inicio, ninguna app que conozco
+tiene eso". Diagnóstico: no es la app — la capa gratuita de Render apaga el
+servicio tras 15 min sin tráfico y despertarlo cuesta 20-60s. Detalle en
+`docs/HANDOFF.md` §3 y §7.
+
+- [x] Corregir la instrucción del README, que recomendaba pinger cada 5 min
+      sin mencionar el cupo de 750 h/mes: así configurado, el servicio se
+      queda sin horas a fin de mes y Render lo **suspende** (app caída, no
+      lenta). Ahora el pinger va acotado a las horas 6 a 23 America/Bogota
+      (≈560 h, con casi 200 de margen).
+- [x] `Dockerfile` en la raíz como plan B verificado para mudar a un host
+      que no duerma (Railway/Fly/Cloud Run). Sin usar todavía: producción
+      sigue en Render. Corre los mismos comandos que el `startCommand`
+      actual; verificado que Alembic aplica las 12 migraciones sobre base
+      vacía y que la app sirve `/health`, el frontend, los JS con `?v=5` y
+      el `service-worker.js` con `cache-control: no-cache`.
+- [ ] **Decisión pendiente del usuario:** pagar ~$5/mes y dejar de depender
+      del cupo. Se eligió probar primero el pinger gratis. La base no se
+      toca en ninguna de las dos (está en Supabase, no en Render).
+
 ## Pendiente — más adelante, sin bloqueo técnico inmediato
 
 - [ ] Fusionar el duplicado real que quedó detectado (MAR-000026 /
@@ -117,6 +139,9 @@ ve reflejado en ningún lado". Detalle largo en `docs/HANDOFF.md` §5.
       futuro). El modelo de datos ya es genérico (`AreaServicio` no está
       atado a Consolidación) — falta sobre todo definir permisos por área
       (¿un líder ve solo su área o todo, como hoy?) antes de expandir.
-- [ ] Dominio propio (Render ya da HTTPS en su subdominio).
+- [ ] Dominio propio (Render ya da HTTPS en su subdominio). Sube de
+      prioridad: la PWA instalada en los celulares apunta al dominio actual,
+      así que mudar de host obliga a cada líder a reinstalarla. Con dominio
+      propio eso pasa una sola vez.
 - [ ] Integración WhatsApp Business API (hoy es pegar el texto a mano) —
       requiere cuenta Business y decisión de qué proveedor usar.

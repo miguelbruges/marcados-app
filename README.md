@@ -252,9 +252,83 @@ propia — no se puede hacer desde el asistente):
    (Administración → Excel → "Importar Excel"), o `migration/migrar_datos_reales.py`
    apuntando `DATABASE_URL` a esa misma base.
 
-**Capa gratuita de Render:** el servicio duerme tras ~15 min de
-inactividad — el próximo pedido tarda 20-30s en despertar. Un pinger externo
-(UptimeRobot, cron-job.org) pegándole a `/health` cada 5 min lo evita.
+### Capa gratuita de Render: por qué la app tarda en abrir
+
+El servicio duerme tras ~15 min sin tráfico, y el siguiente pedido tarda
+entre 20 y 60s en despertar: arrancar la máquina, cargar Python, levantar el
+proceso y reconectar la base. Eso es lo que hace que un líder abra la app en
+medio de una reunión y se quede esperando.
+
+No es un problema de la app ni de Render en particular — es cómo funciona
+cualquier capa gratuita que se apaga por inactividad. La app tiene que estar
+*corriendo* para contestar (busca en la base, cruza asistencias, calcula el
+semáforo); un sitio de solo archivos no tendría este problema porque no hay
+ningún proceso que prender.
+
+**Parche actual: un pinger con horario acotado.** Un servicio externo
+(cron-job.org, UptimeRobot) le pega a `/health` cada 10 minutos y el
+servicio nunca llega a los 15 minutos de inactividad que lo duermen.
+
+El horario importa, y es la parte fácil de hacer mal. Render regala **750
+horas de instancia por mes y por workspace**; un mes tiene hasta 744. O sea
+que mantenerlo despierto 24/7 entra raspando, sin margen, y compartiendo
+ese cupo con cualquier otro servicio gratuito del mismo workspace. Si se
+pasa, Render **suspende el servicio hasta el mes siguiente**: la app no
+queda lenta, queda caída.
+
+Por eso el pinger corre solo en la franja en que el ministerio usa la app:
+
+| | |
+|---|---|
+| URL | `https://marcados-app.onrender.com/health` |
+| Cada | 10 minutos |
+| Horas | 6 a 23 (último ping 23:50) |
+| Zona horaria | America/Bogota |
+
+Despierto de 06:00 a ~00:05 (el servicio se duerme 15 min después del
+último ping): ~18 h/día × 31 días ≈ **560 horas**, con casi 200 de margen
+sobre las 750. De madrugada duerme y no gasta cupo; si alguien entra a las
+4 a.m. espera lo de siempre, que a esa hora no le molesta a nadie.
+
+`/health` es la ruta correcta para esto: devuelve `{"status": "ok"}` sin
+tocar la base de datos, así que despierta el servicio sin costo.
+
+**Revisar el consumo una vez al mes** en el dashboard de Render (el
+workspace muestra las horas gratuitas usadas). Si aparece otro servicio
+gratuito en el mismo workspace, el cupo se reparte y estas cuentas ya no
+valen.
+
+**Esto es un parche, no la solución.** Mientras la app dependa del cupo
+gratuito vive cerca de un límite que la puede tumbar entera. La salida de
+fondo es un host que no se apague, y está preparada — ver abajo.
+
+### Plan B, listo y verificado: un host que no duerma
+
+El `Dockerfile` de la raíz del repo existe para esto. Sirve igual para
+Railway (~$5/mes), Fly.io (~$2-4/mes) o Cloud Run, y no cambia nada del
+comportamiento de la app: corre los mismos dos comandos que Render corre hoy
+en su `startCommand` (`alembic upgrade head && uvicorn app.main:app`).
+
+Verificado el 2026-09-19 con el mismo layout de carpetas que arma la imagen:
+Alembic aplica las 12 migraciones sobre una base vacía (exit 0) y la app
+sirve `/health`, `index.html`, los JS con `?v=5` y el `service-worker.js`
+con `cache-control: no-cache`. Los 210 tests siguen pasando.
+
+**La base de datos no se toca:** vive en Supabase, no en Render. Mudarse es
+levantar el contenedor en el host nuevo y copiarle las mismas variables de
+entorno que hoy están en el dashboard de Render (`DATABASE_URL`,
+`SECRET_KEY`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD`,
+`TELEGRAM_BOT_TOKEN`).
+
+Dos cosas que hay que rehacer después de mudarse, y que es fácil olvidar:
+
+1. **El webhook de Telegram** apunta a la URL vieja. Hay que volver a
+   registrarlo contra el dominio nuevo (ver `.env.example` para el comando
+   de `setWebhook`), o el bot queda mudo sin dar error.
+2. **La PWA ya instalada en los celulares** apunta al dominio viejo. Si la
+   URL cambia, cada líder tiene que volver a instalarla — motivo de peso
+   para configurar un dominio propio *antes* de mudarse, y así no volver a
+   pasar por esto nunca más.
 
 Pendiente, sin bloqueo técnico: dominio propio (Render ya da HTTPS en su
 subdominio), copias de seguridad automáticas de Supabase (hoy el respaldo es

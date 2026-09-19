@@ -1,0 +1,13 @@
+.git
+.gitignore
+docs
+README.md
+render.yaml
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+backend/tests
+backend/marcados_dev.db
+*.xlsx
+*.xlsm
+.env

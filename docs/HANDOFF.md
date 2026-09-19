@@ -6,7 +6,7 @@ retomando MARCADOS en un chat nuevo, empezá acá y después mirá
 `README.md` (cómo funciona cada cosa) y `docs/ESTADO.md` (checklist de
 avance).
 
-Última actualización: **2026-08-27**, sobre `master` en `23f1386`.
+Última actualización: **2026-09-19**, sobre `master` en `3adac44`.
 
 ---
 
@@ -92,6 +92,15 @@ el túnel CONNECT; bloquea casi todo salvo GitHub y los registros de
 paquetes). **No se puede verificar producción desde el agente ni hacer
 cambios contra la base en vivo.** Todo lo que toque producción lo hace el
 usuario desde la app. Es política del entorno: no intentes rodearla.
+
+**Mantener el servicio despierto 24/7 en la capa gratuita lo tumba a fin de
+mes.** Render da 750 horas de instancia por mes *por workspace* y un mes
+tiene hasta 744: un pinger cada 5 minutos sin horario deja cero margen, y
+pasarse no hace la app lenta, la deja **suspendida hasta el mes siguiente**.
+Por eso el pinger corre acotado (horas 6 a 23 America/Bogota ≈ 560 h). El
+README lo decía mal hasta el 2026-09-19 — recomendaba cada 5 min sin
+mencionar el cupo. Si aparece otro servicio gratuito en el workspace, el
+cupo se reparte y la cuenta hay que rehacerla.
 
 ---
 
@@ -193,6 +202,20 @@ antes de dejar que alguien actúe sobre ella. Los tests sintéticos pasaban.
 ---
 
 ## 7. Pendiente / sin cerrar
+
+**El arranque lento está parchado, no resuelto.** El usuario reportó
+(2026-09-19) que la app tarda demasiado en abrir. Causa: la capa gratuita de
+Render apaga el servicio a los 15 min y despertarlo cuesta 20-60s — no es la
+app, es el plan. Se decidió probar primero el camino gratuito (pinger con
+horario acotado, ver §3 y el README) antes de pagar. **La solución de fondo
+es un host que no se apague (~$5/mes); el `Dockerfile` de la raíz ya está
+escrito y verificado para eso, sin usar todavía.** Si vuelve a aparecer
+lentitud, o si Render suspende el servicio por cupo, esa es la salida — y la
+base de datos no se toca, porque vive en Supabase, no en Render.
+
+Antes de mudar de host, definir el **dominio propio**: la PWA instalada en
+los celulares apunta al dominio actual y cambiar de host obliga a cada líder
+a reinstalarla. Con dominio propio eso pasa una sola vez.
 
 **El duplicado real sigue sin fusionar.** MAR-000026 / MAR-000132. Es un
 trámite de tres toques en Jóvenes → Posibles duplicados, pero lo tiene que
