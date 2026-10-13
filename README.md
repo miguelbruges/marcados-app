@@ -252,46 +252,63 @@ propia — no se puede hacer desde el asistente):
    (Administración → Excel → "Importar Excel"), o `migration/migrar_datos_reales.py`
    apuntando `DATABASE_URL` a esa misma base.
 
-### Por qué el plan es 'starter' y no 'free'
+### Por qué la app se mudó a Vercel (y Render quedó de respaldo)
 
-El plan gratuito apaga el servicio tras ~15 min sin tráfico, y el siguiente
-pedido tarda entre 20 y 60s en despertar: arrancar la máquina, cargar
-Python, levantar el proceso y reconectar la base. Un líder que abre la app
-en medio de una reunión espera casi un minuto mirando la pantalla negra de
-Render.
+La capa gratuita de Render apaga el servicio tras ~15 min sin tráfico y
+despertarlo tarda 30-60s. Un líder que abre la app en medio de una reunión
+espera casi un minuto mirando una pantalla negra. Ese era el problema.
 
-No es un problema de la app. La app tiene que estar *corriendo* para
-contestar (busca en la base, cruza asistencias, calcula el semáforo); un
-sitio de solo archivos no tendría este problema porque no hay proceso que
-prender. Cualquier capa gratuita que se apague por inactividad hace lo
-mismo.
+**Lo que se intentó y no alcanzó.** Entre 2026-09 y 2026-10 se configuró un
+pinger externo (cron-job.org contra `/health`, horas 6-23 America/Bogota)
+para que el servicio nunca llegara a los 15 minutos de inactividad. El
+usuario siguió encontrando la pantalla de arranque **a la 1 de la tarde**,
+en pleno horario de uso. Dos límites lo hacían frágil aunque estuviera bien
+configurado: Render da 750 horas de instancia por mes y por workspace contra
+las 744 que tiene un mes, así que mantenerlo despierto 24/7 no entra; y la
+cuenta gratuita de cron-job.org corta a los 30s mientras despertar Render
+tarda ~50, con lo cual el primer ping de cada día figura como fallido aunque
+haya funcionado — un fallo real queda indistinguible del ruido.
 
-**Se intentó evitarlo sin pagar, y no alcanzó.** Entre 2026-09 y 2026-10 se
-configuró un pinger externo (cron-job.org contra `/health`, cada 10 min,
-horas 6-23 America/Bogota) para que el servicio nunca llegara a los 15
-minutos de inactividad. El usuario siguió encontrando la pantalla de
-arranque **a la 1 de la tarde, en pleno horario de uso**. Se descartó: para
-algo que el equipo usa de verdad, un rodeo que hay que vigilar y que falla
-en silencio es peor que pagar.
+**Por qué no se pagó el plan.** No hay presupuesto para este proyecto. El
+`render.yaml` dice `plan: free` a propósito: subirlo a `starter` genera un
+cobro real. No lo cambies sin que el usuario lo pida.
 
-Queda anotado por si alguien vuelve a proponerlo, con los dos límites que
-lo hacen frágil aunque esté bien configurado:
+**Por qué Vercel.** No existe hosting gratuito que no se duerma — Koyeb
+duerme y además pide tarjeta, Cloud Run duerme. Pero dormirse no es el
+problema: el problema es *cuánto tarda en despertar*. Render tarda 30-60s;
+Vercel, 1-3s, que se siente instantáneo. Y Vercel es el único que no pide
+tarjeta.
 
-- Render da **750 horas de instancia por mes y por workspace**, y un mes
-  tiene hasta 744: mantenerlo despierto 24/7 no entra. Pasarse no pone la
-  app lenta, la deja **suspendida hasta el mes siguiente**.
-- La cuenta gratuita de cron-job.org corta a los 30s y despertar Render
-  tarda ~50s, así que el primer ping de cada día **siempre figura como
-  fallido** aunque haya funcionado. Eso hace que un fallo real sea
-  indistinguible del ruido normal.
+La app corre ahí como función serverless (`api/index.py`, `vercel.json`).
+Es el **mismo** `app/main.py`, el mismo origen para API y frontend y la
+misma base de Supabase — no hay una versión "de Vercel" del código.
 
-**'starter' nunca apaga el servicio.** Es la única diferencia relevante
-entre los dos planes para esta app: mismo código, misma base, misma URL.
+**Lo único que cambia en el código** es el pool de conexiones
+(`app/database.py`): en serverless cada invocación puede ser un proceso
+nuevo, así que un pool no se reutiliza y solo deja conexiones abiertas hasta
+agotar el límite de Postgres. Con `VERCEL=1` (que Vercel define sola) se usa
+`NullPool` y el pooling lo hace Supabase. Fuera de Vercel esa rama no se
+toca: Render y los tests se comportan igual que siempre.
 
-El plan se declara en `render.yaml` (`plan: starter`) pero **eso solo no
-basta**: hay que confirmarlo en el dashboard de Render, que es donde está
-el método de pago. La línea del blueprint existe para que un re-sync no lo
-devuelva a `free` por detrás.
+**Variables de entorno en Vercel:** las mismas que en Render
+(`DATABASE_URL`, `SECRET_KEY`, `ADMIN_BOOTSTRAP_EMAIL`,
+`ADMIN_BOOTSTRAP_PASSWORD`, `TELEGRAM_BOT_TOKEN`, `ENVIRONMENT=production`).
+En `DATABASE_URL` usar la connection string del **Transaction pooler** de
+Supabase (puerto 6543), no la conexión directa: es la que está pensada para
+serverless.
+
+**Dos límites de Vercel que conviene tener presentes** (ninguno afecta el
+uso diario, los dos afectan al Excel):
+
+- El cuerpo de un pedido o una respuesta no puede pasar de **4,5 MB**. Subir
+  una plantilla de Excel más grande que eso falla. La plantilla actual ya
+  está guardada en la base, así que esto solo importa si se cambia.
+- La exportación a Excel devuelve el libro armado. Si algún día pesa más de
+  4,5 MB, ese endpoint va a fallar **y es el único respaldo de la base**
+  (ver "Pendiente"). Hay que probarlo de verdad antes de dar de baja Render.
+
+**Render queda levantado** (gratis, lento) hasta confirmar que Vercel anda
+bien, incluida la exportación. No lo apagues antes de eso.
 
 ### Cuidado con `DATABASE_URL` en `render.yaml`
 

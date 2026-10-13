@@ -93,6 +93,12 @@ paquetes). **No se puede verificar producción desde el agente ni hacer
 cambios contra la base en vivo.** Todo lo que toque producción lo hace el
 usuario desde la app. Es política del entorno: no intentes rodearla.
 
+**No hay presupuesto para este proyecto.** El usuario lo dijo explícitamente
+(2026-10-13) después de que el agente le propusiera el plan pago de Render.
+`render.yaml` dice `plan: free` a propósito: subirlo genera un cobro real.
+La solución al arranque lento fue mudarse a Vercel (gratis, sin tarjeta,
+despierta en 1-3s en vez de 30-60s), no pagar.
+
 **El pinger no sustituye a pagar el plan.** Se intentó (2026-09/10) y falló:
 el usuario encontró la pantalla de arranque de Render **a la 1 de la tarde**,
 en pleno horario de uso, con el pinger supuestamente configurado. Peor, el

@@ -1,21 +1,22 @@
 # Blueprint de Render (https://render.com/docs/blueprint-spec).
 # En el dashboard de Render: New > Blueprint > conectar este repo > Apply.
 #
-# PLAN: 'starter', no 'free'. La capa gratuita apaga el servicio tras 15 min
-# sin tráfico y despertarlo tarda 30-60s — un líder que abre la app en medio
-# de una reunión se queda esperando casi un minuto. Se intentó evitarlo con
-# un pinger externo (2026-09/10) y no alcanzó: el servicio se siguió
-# durmiendo en pleno horario de uso. 'starter' nunca lo apaga, y es la
-# única diferencia entre los dos planes para esta app.
+# PLAN: 'free' A PROPÓSITO. NO lo subas a 'starter' sin que el usuario lo
+# pida: no hay presupuesto para este proyecto, y un re-sync del blueprint
+# con 'starter' puesto genera un cobro real.
 #
-# Cambiar este valor acá NO basta: el plan de pago hay que confirmarlo en el
-# dashboard de Render (requiere método de pago). Esta línea existe para que
-# un re-sync del blueprint no lo devuelva a 'free' por detrás.
+# El arranque lento de la capa gratuita (30-60s) NO se resuelve acá: se
+# resolvió mudando la app a Vercel, donde despertar tarda 1-3s y no cuesta
+# nada (ver vercel.json y api/index.py). Este servicio de Render queda como
+# respaldo mientras se confirma que Vercel anda bien.
+#
+# Un pinger externo tampoco sirvió: se probó entre 2026-09 y 2026-10 y el
+# servicio se siguió durmiendo en pleno horario de uso.
 services:
   - type: web
     name: marcados-api
     runtime: python
-    plan: starter
+    plan: free
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "_comentario_rewrites": "Todo el tráfico va a la misma función, que es la app FastAPI completa — igual que hoy en Render, donde un solo servicio sirve la API y el frontend desde el mismo origen. Eso NO es casualidad ni pereza: ver docs/ARQUITECTURA.md, el proyecto ya probó tener el frontend y la API en dominios distintos y fallaba de forma intermitente desde celulares reales por CORS. Mismo origen lo evita de raíz.",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ],
+
+  "_comentario_includeFiles": "Vercel empaqueta solo lo que detecta leyendo los imports, y acá se le escapan dos cosas: backend/ se importa con un sys.path dinámico (api/index.py) que el análisis estático no sigue, y frontend/ son archivos que ningún import menciona. Sin estas dos líneas el despliegue sale 'exitoso' y la app responde 500 o pantalla en blanco.",
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "{backend,frontend}/**"
+    }
+  }
+}

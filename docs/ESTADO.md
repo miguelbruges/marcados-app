@@ -117,23 +117,35 @@ servicio tras 15 min sin tráfico y despertarlo cuesta 20-60s. Detalle en
       del cupo. Se eligió probar primero el pinger gratis. La base no se
       toca en ninguna de las dos (está en Supabase, no en Render).
 
-## Sesión 2026-10-13 — se paga el plan, el pinger no alcanzó
+## Sesión 2026-10-13 — la app se muda a Vercel (gratis)
 
 El pinger gratuito se probó durante tres semanas y falló: el usuario
 encontró la pantalla de arranque de Render a la 1 de la tarde, en pleno
 horario de uso. Decisión: subir a `starter`.
 
-- [x] `render.yaml` a `plan: starter`, con el porqué escrito al lado para
-      que nadie lo baje de nuevo "para ahorrar".
+- [x] Mudanza a Vercel: `api/index.py`, `vercel.json`, `requirements.txt` en
+      la raíz y `NullPool` en `app/database.py` cuando corre en serverless
+      (condicional: Render y los tests no cambian). Despierta en 1-3s en vez
+      de 30-60s, no pide tarjeta. Verificado localmente arrancando por
+      `api/index.py` con `VERCEL=1`: NullPool activo, y responden `/health`,
+      `index.html`, los JS y CSS con `?v=5`, el manifest y `/auth/login`.
+      210 tests siguen pasando.
+- [x] `render.yaml` se queda en `plan: free` — **no hay presupuesto**; el
+      usuario lo dijo explícitamente. Subirlo a `starter` cobra.
 - [x] **Bug latente corregido:** `DATABASE_URL` tenía
       `value: sqlite:///./marcados.db` en el blueprint mientras la real
       (Supabase) vivía solo en el dashboard. Un re-sync habría apuntado
       producción a una base vacía sin dar error. Ahora `sync: false`.
-- [x] Documentado por qué NO se migró a Railway pese al Dockerfile listo:
-      cambiar de host cambia la URL, y eso obliga a cada líder a reinstalar
-      la PWA. Pagar el plan resuelve lo mismo sin ese costo.
-- [ ] **Paso del usuario:** confirmar el plan de pago en el dashboard de
-      Render. El cambio en `render.yaml` solo no lo activa.
+- [ ] **Paso del usuario:** cargar las variables de entorno en Vercel
+      (sobre todo `DATABASE_URL`, con la connection string del *Transaction
+      pooler* de Supabase, puerto 6543). El agente no puede: la contraseña
+      de producción no pasa por el chat.
+- [ ] **Probar la exportación a Excel en Vercel antes de apagar Render.**
+      Vercel corta respuestas de más de 4,5 MB y ese endpoint es hoy el
+      único respaldo de la base.
+- [ ] Al confirmar Vercel: re-registrar el webhook de Telegram contra la URL
+      nueva (si no, el bot queda mudo sin dar error) y avisar a los líderes
+      que reinstalen la PWA, que apunta al dominio viejo.
 
 ## Pendiente — más adelante, sin bloqueo técnico inmediato
 

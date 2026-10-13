@@ -1,0 +1,21 @@
+# Dependencias para el despliegue en Vercel (ver api/index.py).
+#
+# Está duplicado de backend/requirements.txt a propósito: Vercel busca este
+# archivo en la raíz del repo y no sigue un '-r otra/ruta.txt'. Las versiones
+# TIENEN que coincidir con backend/requirements.txt — si tocás una, tocá la
+# otra. Se omiten pytest y httpx: son de desarrollo y solo harían más pesada
+# y más lenta de arrancar la función.
+fastapi==0.115.0
+sqlalchemy==2.0.35
+alembic==1.13.3
+pydantic==2.9.2
+pydantic[email]==2.9.2
+pydantic-settings==2.5.2
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.9
+rapidfuzz==3.9.7
+openpyxl==3.1.5
+python-dotenv==1.0.1
+psycopg2-binary==2.9.9
