@@ -252,60 +252,71 @@ propia — no se puede hacer desde el asistente):
    (Administración → Excel → "Importar Excel"), o `migration/migrar_datos_reales.py`
    apuntando `DATABASE_URL` a esa misma base.
 
-### Capa gratuita de Render: por qué la app tarda en abrir
+### Por qué el plan es 'starter' y no 'free'
 
-El servicio duerme tras ~15 min sin tráfico, y el siguiente pedido tarda
-entre 20 y 60s en despertar: arrancar la máquina, cargar Python, levantar el
-proceso y reconectar la base. Eso es lo que hace que un líder abra la app en
-medio de una reunión y se quede esperando.
+El plan gratuito apaga el servicio tras ~15 min sin tráfico, y el siguiente
+pedido tarda entre 20 y 60s en despertar: arrancar la máquina, cargar
+Python, levantar el proceso y reconectar la base. Un líder que abre la app
+en medio de una reunión espera casi un minuto mirando la pantalla negra de
+Render.
 
-No es un problema de la app ni de Render en particular — es cómo funciona
-cualquier capa gratuita que se apaga por inactividad. La app tiene que estar
-*corriendo* para contestar (busca en la base, cruza asistencias, calcula el
-semáforo); un sitio de solo archivos no tendría este problema porque no hay
-ningún proceso que prender.
+No es un problema de la app. La app tiene que estar *corriendo* para
+contestar (busca en la base, cruza asistencias, calcula el semáforo); un
+sitio de solo archivos no tendría este problema porque no hay proceso que
+prender. Cualquier capa gratuita que se apague por inactividad hace lo
+mismo.
 
-**Parche actual: un pinger con horario acotado.** Un servicio externo
-(cron-job.org, UptimeRobot) le pega a `/health` cada 10 minutos y el
-servicio nunca llega a los 15 minutos de inactividad que lo duermen.
+**Se intentó evitarlo sin pagar, y no alcanzó.** Entre 2026-09 y 2026-10 se
+configuró un pinger externo (cron-job.org contra `/health`, cada 10 min,
+horas 6-23 America/Bogota) para que el servicio nunca llegara a los 15
+minutos de inactividad. El usuario siguió encontrando la pantalla de
+arranque **a la 1 de la tarde, en pleno horario de uso**. Se descartó: para
+algo que el equipo usa de verdad, un rodeo que hay que vigilar y que falla
+en silencio es peor que pagar.
 
-El horario importa, y es la parte fácil de hacer mal. Render regala **750
-horas de instancia por mes y por workspace**; un mes tiene hasta 744. O sea
-que mantenerlo despierto 24/7 entra raspando, sin margen, y compartiendo
-ese cupo con cualquier otro servicio gratuito del mismo workspace. Si se
-pasa, Render **suspende el servicio hasta el mes siguiente**: la app no
-queda lenta, queda caída.
+Queda anotado por si alguien vuelve a proponerlo, con los dos límites que
+lo hacen frágil aunque esté bien configurado:
 
-Por eso el pinger corre solo en la franja en que el ministerio usa la app:
+- Render da **750 horas de instancia por mes y por workspace**, y un mes
+  tiene hasta 744: mantenerlo despierto 24/7 no entra. Pasarse no pone la
+  app lenta, la deja **suspendida hasta el mes siguiente**.
+- La cuenta gratuita de cron-job.org corta a los 30s y despertar Render
+  tarda ~50s, así que el primer ping de cada día **siempre figura como
+  fallido** aunque haya funcionado. Eso hace que un fallo real sea
+  indistinguible del ruido normal.
 
-| | |
-|---|---|
-| URL | `https://marcados-app.onrender.com/health` |
-| Cada | 10 minutos |
-| Horas | 6 a 23 (último ping 23:50) |
-| Zona horaria | America/Bogota |
+**'starter' nunca apaga el servicio.** Es la única diferencia relevante
+entre los dos planes para esta app: mismo código, misma base, misma URL.
 
-Despierto de 06:00 a ~00:05 (el servicio se duerme 15 min después del
-último ping): ~18 h/día × 31 días ≈ **560 horas**, con casi 200 de margen
-sobre las 750. De madrugada duerme y no gasta cupo; si alguien entra a las
-4 a.m. espera lo de siempre, que a esa hora no le molesta a nadie.
+El plan se declara en `render.yaml` (`plan: starter`) pero **eso solo no
+basta**: hay que confirmarlo en el dashboard de Render, que es donde está
+el método de pago. La línea del blueprint existe para que un re-sync no lo
+devuelva a `free` por detrás.
 
-`/health` es la ruta correcta para esto: devuelve `{"status": "ok"}` sin
-tocar la base de datos, así que despierta el servicio sin costo.
+### Cuidado con `DATABASE_URL` en `render.yaml`
 
-**Revisar el consumo una vez al mes** en el dashboard de Render (el
-workspace muestra las horas gratuitas usadas). Si aparece otro servicio
-gratuito en el mismo workspace, el cupo se reparte y estas cuentas ya no
-valen.
+Hasta 2026-10 el blueprint traía `DATABASE_URL` con un
+`value: sqlite:///./marcados.db` — la base de juguete del desarrollo local.
+La real es la connection string de Supabase y vive **solo** en el dashboard,
+porque lleva contraseña y no va a git.
 
-**Esto es un parche, no la solución.** Mientras la app dependa del cupo
-gratuito vive cerca de un límite que la puede tumbar entera. La salida de
-fondo es un host que no se apague, y está preparada — ver abajo.
+Con ese `value:` puesto, un re-sync del blueprint pisaba la variable real
+con el sqlite y la app arrancaba contra una base **vacía, sin dar ningún
+error**: los 120 jóvenes simplemente no aparecían hasta restaurar la
+variable a mano. Ahora está como `sync: false`, que le dice a Render que
+respete lo que haya en el dashboard. **No le pongas un `value:` nunca.**
 
-### Plan B, listo y verificado: un host que no duerma
+### Plan B, listo y verificado: mudarse de host
 
-El `Dockerfile` de la raíz del repo existe para esto. Sirve igual para
-Railway (~$5/mes), Fly.io (~$2-4/mes) o Cloud Run, y no cambia nada del
+**No está en uso, y a propósito.** Cuando el arranque lento se volvió
+intolerable (2026-10) la salida elegida fue subir a `starter` en Render, no
+mudarse — porque mudarse cambia la URL, y la app está instalada como PWA en
+los celulares de los líderes: cada uno tendría que desinstalarla y volver a
+instalarla. Pagar el plan evita todo eso y resuelve lo mismo.
+
+El `Dockerfile` de la raíz queda para el día que mudarse sí convenga (por
+precio, o después de tener dominio propio). Sirve igual para Railway
+(~$5/mes), Fly.io (~$2-4/mes) o Cloud Run, y no cambia nada del
 comportamiento de la app: corre los mismos dos comandos que Render corre hoy
 en su `startCommand` (`alembic upgrade head && uvicorn app.main:app`).
 

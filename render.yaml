@@ -1,15 +1,21 @@
 # Blueprint de Render (https://render.com/docs/blueprint-spec).
 # En el dashboard de Render: New > Blueprint > conectar este repo > Apply.
 #
-# Capa gratuita: el disco es efímero (los datos en SQLite pueden perderse si
-# el servicio se reinicia o duerme por inactividad). Sirve para probar que
-# la app funciona desde el celular — no para guardar datos reales todavía.
-# Cuando se decida Supabase/Postgres, solo hay que cambiar DATABASE_URL.
+# PLAN: 'starter', no 'free'. La capa gratuita apaga el servicio tras 15 min
+# sin tráfico y despertarlo tarda 30-60s — un líder que abre la app en medio
+# de una reunión se queda esperando casi un minuto. Se intentó evitarlo con
+# un pinger externo (2026-09/10) y no alcanzó: el servicio se siguió
+# durmiendo en pleno horario de uso. 'starter' nunca lo apaga, y es la
+# única diferencia entre los dos planes para esta app.
+#
+# Cambiar este valor acá NO basta: el plan de pago hay que confirmarlo en el
+# dashboard de Render (requiere método de pago). Esta línea existe para que
+# un re-sync del blueprint no lo devuelva a 'free' por detrás.
 services:
   - type: web
     name: marcados-api
     runtime: python
-    plan: free
+    plan: starter
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
@@ -17,7 +23,14 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: DATABASE_URL
-        value: sqlite:///./marcados.db
+        # sync: false, NUNCA un 'value:' acá. Antes decía
+        # 'value: sqlite:///./marcados.db', que es la base de juguete del
+        # desarrollo local. La real es la connection string de Supabase y
+        # vive solo en el dashboard (tiene contraseña: no va a git). Con un
+        # 'value:' puesto, un re-sync del blueprint la pisaba con el sqlite
+        # y la app arrancaba contra una base VACÍA, sin error visible: los
+        # 120 jóvenes "desaparecían" hasta restaurar la variable a mano.
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS

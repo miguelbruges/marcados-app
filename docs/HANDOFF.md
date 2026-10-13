@@ -6,7 +6,7 @@ retomando MARCADOS en un chat nuevo, empezá acá y después mirá
 `README.md` (cómo funciona cada cosa) y `docs/ESTADO.md` (checklist de
 avance).
 
-Última actualización: **2026-09-19**, sobre `master` en `3adac44`.
+Última actualización: **2026-10-13**, sobre `master` en `fff0f05`.
 
 ---
 
@@ -92,6 +92,15 @@ el túnel CONNECT; bloquea casi todo salvo GitHub y los registros de
 paquetes). **No se puede verificar producción desde el agente ni hacer
 cambios contra la base en vivo.** Todo lo que toque producción lo hace el
 usuario desde la app. Es política del entorno: no intentes rodearla.
+
+**El pinger no sustituye a pagar el plan.** Se intentó (2026-09/10) y falló:
+el usuario encontró la pantalla de arranque de Render **a la 1 de la tarde**,
+en pleno horario de uso, con el pinger supuestamente configurado. Peor, el
+modo de fallo es silencioso y difícil de leer: la cuenta gratuita de
+cron-job.org corta a los 30s y despertar Render tarda ~50s, así que el
+primer ping de cada día figura como fallido aunque haya funcionado — un
+fallo real se confunde con el ruido normal. Desde 2026-10 el plan es
+`starter`. Si alguien propone volver al pinger, esto ya se probó.
 
 **Mantener el servicio despierto 24/7 en la capa gratuita lo tumba a fin de
 mes.** Render da 750 horas de instancia por mes *por workspace* y un mes
@@ -202,6 +211,13 @@ antes de dejar que alguien actúe sobre ella. Los tests sintéticos pasaban.
 ---
 
 ## 7. Pendiente / sin cerrar
+
+**`DATABASE_URL` tenía un `value:` en `render.yaml` que podía vaciar la app.**
+Decía `value: sqlite:///./marcados.db` (la base de juguete local) mientras la
+real —Supabase— vivía solo en el dashboard. Un re-sync del blueprint habría
+pisado la variable real y la app habría arrancado contra una base **vacía sin
+dar error**: los 120 jóvenes desaparecidos hasta restaurarla a mano. Corregido
+a `sync: false` el 2026-10-13. **Nunca le pongas un `value:` a esa clave.**
 
 **El arranque lento está parchado, no resuelto.** El usuario reportó
 (2026-09-19) que la app tarda demasiado en abrir. Causa: la capa gratuita de

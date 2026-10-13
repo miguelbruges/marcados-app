@@ -2,7 +2,7 @@
 
 Checklist vivo. Actualizar al final de cada sesión de trabajo sobre este
 repo (separado del checklist de trabajo sobre el Excel, que vive en la skill
-`marcados-sistema` de Claude). Última actualización: 2026-09-19.
+`marcados-sistema` de Claude). Última actualización: 2026-10-13.
 
 Si estás retomando el proyecto en un chat nuevo, leé primero
 `docs/HANDOFF.md`: ahí están las reglas que no se negocian y las trampas
@@ -116,6 +116,24 @@ servicio tras 15 min sin tráfico y despertarlo cuesta 20-60s. Detalle en
 - [ ] **Decisión pendiente del usuario:** pagar ~$5/mes y dejar de depender
       del cupo. Se eligió probar primero el pinger gratis. La base no se
       toca en ninguna de las dos (está en Supabase, no en Render).
+
+## Sesión 2026-10-13 — se paga el plan, el pinger no alcanzó
+
+El pinger gratuito se probó durante tres semanas y falló: el usuario
+encontró la pantalla de arranque de Render a la 1 de la tarde, en pleno
+horario de uso. Decisión: subir a `starter`.
+
+- [x] `render.yaml` a `plan: starter`, con el porqué escrito al lado para
+      que nadie lo baje de nuevo "para ahorrar".
+- [x] **Bug latente corregido:** `DATABASE_URL` tenía
+      `value: sqlite:///./marcados.db` en el blueprint mientras la real
+      (Supabase) vivía solo en el dashboard. Un re-sync habría apuntado
+      producción a una base vacía sin dar error. Ahora `sync: false`.
+- [x] Documentado por qué NO se migró a Railway pese al Dockerfile listo:
+      cambiar de host cambia la URL, y eso obliga a cada líder a reinstalar
+      la PWA. Pagar el plan resuelve lo mismo sin ese costo.
+- [ ] **Paso del usuario:** confirmar el plan de pago en el dashboard de
+      Render. El cambio en `render.yaml` solo no lo activa.
 
 ## Pendiente — más adelante, sin bloqueo técnico inmediato
 
